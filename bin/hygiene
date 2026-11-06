@@ -1,0 +1,95 @@
+#!/usr/bin/env perl
+# This repository is public. Exit 1 when a tracked file holds a private key,
+# a path from a developer's machine or an email address, or when lib/ names
+# a product: the library serves every app the same way. Exit 2 when the
+# check itself cannot run, so a broken check never reads as clean.
+#
+# The patterns are written so this file does not match itself: `U[s]ers`
+# matches the text "Users", and the pattern's own text does not.
+use strict;
+use warnings;
+use FindBin;
+
+chdir "$FindBin::Bin/.." or die "hygiene: cannot enter the repository: $!\n";
+
+my $base64 = qr{[A-Za-z0-9+/=]{40,}};
+my @keys = (
+  # A PEM private key block with a body, in any shape a file can carry it:
+  # indented, inside a string with literal \n, or after header lines.
+  # Built up by concatenation too: `"...-----\n" <> "MC4C..."`.
+  qr{-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----(?:\\+[rn]|\s|["'`<>+.,]|[A-Za-z-]+:[^\n]*\n){0,40}?$base64},
+  qr{P[u]TTY-User-Key-File-\d+:},
+);
+my @local = (
+  qr{/U[s]ers/}i, qr{/h[o]me/[A-Za-z]}, qr{/p[r]ivate/(?:tmp|var)/}, qr{/v[a]r/folders/},
+  qr{/V[o]lumes/}, qr{[A-Za-z]:\\\\?U[s]ers\\}i, qr{(?:^|[\s"'`(=])~/}m,
+  qr{claude[_]worktrees}, qr{s[c]ratchpad}i,
+);
+my $email = qr{[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}};
+my $noreply = qr{(?:\@users\.noreply\.github\.com|^noreply\@github\.com)$};
+
+open(my $list, '-|', 'git', 'ls-files', '-z') or die "hygiene: cannot run git: $!\n";
+my @files = do { local $/ = "\0"; map { chomp; $_ } <$list> };
+close($list) or die "hygiene: git ls-files failed\n";
+die "hygiene: git lists no files\n" unless @files;
+
+my @findings;
+for my $file (@files) {
+  # Git stores a link's target as the file's content, so a link is checked
+  # by its target.
+  my $text;
+  if (-l $file) {
+    $text = readlink($file);
+    die "hygiene: cannot read the link $file: $!\n" unless defined $text;
+  } else {
+    open(my $fh, '<:raw', $file) or die "hygiene: cannot read $file: $!\n";
+    $text = do { local $/; <$fh> };
+    close($fh);
+  }
+  $text = '' unless defined $text;
+
+  for my $re (@keys) {
+    push @findings, "$file: a private key block" if $text =~ $re;
+  }
+  for my $re (@local) {
+    push @findings, "$file: a local path ($&)" if $text =~ $re;
+  }
+  while ($text =~ /$email/g) {
+    my $address = $&;
+    push @findings, "$file: an email address ($address)" unless $address =~ $noreply;
+  }
+  if ($file =~ m{^lib/} && $text =~ /(e[a]gle)/i) {
+    push @findings, "$file: names a product ($1); the library takes it from its caller";
+  }
+}
+
+# The author and committer of each commit this branch adds. HYGIENE_BASE
+# names the branch it adds to (default origin/main); with no such ref, as in
+# a repository with no remote yet, there is nothing to compare against.
+# HYGIENE_HEAD names the branch's last commit (default HEAD): a pull
+# request's CI checks out a merge commit GitHub makes, which is not one of
+# the branch's commits and never lands.
+my $base = $ENV{HYGIENE_BASE} || 'origin/main';
+my $head = $ENV{HYGIENE_HEAD} || 'HEAD';
+open(my $rev, '-|', 'git', 'rev-parse', '--verify', '--quiet', "$base^{commit}")
+  or die "hygiene: cannot run git rev-parse: $!\n";
+my $has_base = defined(<$rev>);
+close($rev);
+if ($has_base) {
+  open(my $log, '-|', 'git', 'log', '--format=%ae%n%ce', "$base..$head")
+    or die "hygiene: cannot run git log: $!\n";
+  my @addresses = <$log>;
+  close($log) or die "hygiene: git log failed\n";
+  chomp @addresses;
+  for my $address (@addresses) {
+    push @findings, "a commit names an email address ($address)"
+      unless $address eq '' || $address =~ $noreply;
+  }
+} else {
+  print STDERR "hygiene: no $base to compare commits against; commit emails not checked\n";
+}
+
+if (@findings) {
+  print STDERR "$_\n" for @findings;
+  exit 1;
+}
