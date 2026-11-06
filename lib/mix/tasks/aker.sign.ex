@@ -73,7 +73,9 @@ defmodule Mix.Tasks.Aker.Sign do
   def run(argv) do
     {opts, args} = OptionParser.parse!(argv, strict: @switches)
     request_path = request_path!(args, opts)
-    features = if opts[:features], do: String.split(opts[:features], ","), else: []
+    # `--features ""` names no feature; an empty name between commas is refused.
+    features =
+      if opts[:features] in [nil, ""], do: [], else: String.split(opts[:features], ",")
 
     if not Request.product?(opts[:product]),
       do: Mix.raise("--product is 1 to 64 characters of a-z, 0-9, _ and -")

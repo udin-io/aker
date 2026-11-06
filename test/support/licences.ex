@@ -111,3 +111,20 @@ defmodule Aker.TestSupport.Licences.CopiedKey do
     module.sign(message, signer_opts)
   end
 end
+
+defmodule Aker.TestSupport.Licences.OddKey do
+  @moduledoc "An install key whose `public_key/1` answers neither `{:ok, _}` nor `{:error, _}`."
+  @behaviour Aker.InstallKey
+
+  @impl true
+  def kind, do: :software
+
+  @impl true
+  def ensure(_opts), do: :error
+
+  @impl true
+  def public_key(_opts), do: :error
+
+  @impl true
+  def sign(_message, _opts), do: :error
+end
