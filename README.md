@@ -1,4 +1,4 @@
-# ExLicence
+# Aker
 
 Licences for on-premises Elixir apps: an install key held in a file or the
 machine's TPM chip, signed activation requests, licence files signed by a
@@ -16,14 +16,14 @@ file and the gate follow before 0.1.0.
 dir = "/var/lib/my_app/licence"
 
 # A key in the TPM chip when the machine has one, in a 0600 file otherwise.
-install_key = ExLicence.InstallKey.for_dir(dir)
+install_key = Aker.InstallKey.for_dir(dir)
 {module, opts} = install_key
 {:ok, _public_key} = module.ensure(opts)
 
-{:ok, machine_id_hash} = ExLicence.MachineId.hash("/etc/machine-id")
+{:ok, machine_id_hash} = Aker.MachineId.hash("/etc/machine-id")
 
 {:ok, request} =
-  ExLicence.Request.build(
+  Aker.Request.build(
     product: "my_app",
     product_version: "1.2.0",
     install_key: install_key,
@@ -34,7 +34,7 @@ File.write!("activation-request.json", request)
 ```
 
 The licensing server reads the request back with
-`ExLicence.Request.verify(bytes, product: "my_app")`, which answers the install
+`Aker.Request.verify(bytes, product: "my_app")`, which answers the install
 public key and machine id hash only when the key the request names signed it.
 
 ## Installation
@@ -42,7 +42,7 @@ public key and machine id hash only when the key the request names signed it.
 ```elixir
 def deps do
   [
-    {:ex_licence, github: "udin-io/ex_licence"}
+    {:aker, github: "udin-io/aker"}
   ]
 end
 ```

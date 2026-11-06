@@ -1,4 +1,4 @@
-defmodule ExLicence.MachineId do
+defmodule Aker.MachineId do
   @moduledoc """
   The host's identity a licence names: the SHA-256 of its machine id file,
   lowercase hex.

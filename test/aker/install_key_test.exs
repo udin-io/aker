@@ -1,12 +1,12 @@
-defmodule ExLicence.InstallKeyTest do
+defmodule Aker.InstallKeyTest do
   @moduledoc """
   The software install key is a 0600 file made once, which keeps
   the same public key across restarts and signs what verifies against it.
   """
   use ExUnit.Case, async: true
 
-  alias ExLicence.InstallKey
-  alias ExLicence.InstallKey.Software
+  alias Aker.InstallKey
+  alias Aker.InstallKey.Software
 
   @moduletag :tmp_dir
 

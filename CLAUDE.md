@@ -1,4 +1,4 @@
-# ex_licence
+# aker
 
 A public Hex library. Every file, commit message, issue and PR here is public.
 

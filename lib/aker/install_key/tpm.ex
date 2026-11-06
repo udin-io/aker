@@ -1,4 +1,4 @@
-defmodule ExLicence.InstallKey.Tpm do
+defmodule Aker.InstallKey.Tpm do
   @moduledoc """
   The install key inside the machine's TPM 2.0 chip. The chip
   makes the P-256 keypair and never lets the private half out, so a copied
@@ -27,7 +27,7 @@ defmodule ExLicence.InstallKey.Tpm do
   holds key material, since the chip never releases it.
   """
 
-  @behaviour ExLicence.InstallKey
+  @behaviour Aker.InstallKey
 
   require Logger
 
@@ -265,7 +265,7 @@ defmodule ExLicence.InstallKey.Tpm do
   end
 
   # A folder the library makes is closed to other users; one the operator
-  # made keeps its mode, as `ExLicence.InstallKey.Software` does.
+  # made keeps its mode, as `Aker.InstallKey.Software` does.
   defp make_dir(dir) do
     if File.dir?(dir), do: :ok, else: with(:ok <- File.mkdir_p(dir), do: File.chmod(dir, 0o700))
   end

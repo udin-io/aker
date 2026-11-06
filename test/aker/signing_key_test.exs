@@ -1,13 +1,13 @@
-defmodule ExLicence.SigningKeyTest do
+defmodule Aker.SigningKeyTest do
   @moduledoc """
   How a private Ed25519 signing key is read and held: only the PEM block
   openssl writes, never from inside the checkout, and never printed.
   """
   use ExUnit.Case, async: true
 
-  import ExLicence.TestSupport.Keys, only: [pem: 1]
+  import Aker.TestSupport.Keys, only: [pem: 1]
 
-  alias ExLicence.SigningKey
+  alias Aker.SigningKey
 
   @moduletag :tmp_dir
 
@@ -85,7 +85,7 @@ defmodule ExLicence.SigningKeyTest do
     {:ok, key} = SigningKey.from_pem(pem(ctx.seed))
     shown = inspect(key, limit: :infinity, structs: true)
 
-    assert shown == "#ExLicence.SigningKey<redacted>"
+    assert shown == "#Aker.SigningKey<redacted>"
     refute shown =~ Base.encode64(ctx.seed)
     refute inspect({:error, key}) =~ inspect(ctx.seed)
   end

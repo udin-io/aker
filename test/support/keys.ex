@@ -1,11 +1,11 @@
-defmodule ExLicence.TestSupport.Keys do
+defmodule Aker.TestSupport.Keys do
   @moduledoc """
   Keys for tests, made during the run. No key file is checked in.
   """
 
-  alias ExLicence.InstallKey.Software
-  alias ExLicence.MachineId
-  alias ExLicence.SigningKey
+  alias Aker.InstallKey.Software
+  alias Aker.MachineId
+  alias Aker.SigningKey
 
   @doc "The PEM text `openssl genpkey -algorithm ed25519` writes for `seed`."
   def pem(seed) do

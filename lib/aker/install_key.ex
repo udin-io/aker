@@ -1,4 +1,4 @@
-defmodule ExLicence.InstallKey do
+defmodule Aker.InstallKey do
   @moduledoc """
   The keypair that ties a licence to one install. The licensing server
   stores its public half and names it in the signed licence; the app proves
@@ -9,11 +9,11 @@ defmodule ExLicence.InstallKey do
   point, base64; a signature as DER, the form OpenSSL and the TPM tools
   write.
 
-  `ExLicence.InstallKey.Software` keeps the private key in a file;
-  `ExLicence.InstallKey.Tpm` keeps it in the chip.
+  `Aker.InstallKey.Software` keeps the private key in a file;
+  `Aker.InstallKey.Tpm` keeps it in the chip.
   """
 
-  alias ExLicence.InstallKey.{Software, Tpm}
+  alias Aker.InstallKey.{Software, Tpm}
 
   @typedoc "The uncompressed P-256 point: 0x04, then X and Y."
   @type public_key :: <<_::520>>
@@ -45,7 +45,7 @@ defmodule ExLicence.InstallKey do
   Options:
 
     * `:tpm_device` - the chip's device (default `/dev/tpmrm0`);
-    * `:tpm_options` - options passed to `ExLicence.InstallKey.Tpm`.
+    * `:tpm_options` - options passed to `Aker.InstallKey.Tpm`.
   """
   @spec for_dir(Path.t(), keyword()) :: {module(), opts()}
   def for_dir(dir, opts \\ []) do
