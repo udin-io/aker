@@ -1,9 +1,9 @@
-defmodule Mix.Tasks.ExLicence.Sign do
+defmodule Mix.Tasks.Aker.Sign do
   @moduledoc """
   Sign a licence from an install's activation request, standing in for the
   licensing server on your own machine.
 
-      mix ex_licence.sign request.json --product my_app \\
+      mix aker.sign request.json --product my_app \\
         --root-key ../keys/root.pem --customer "Acme Logistics" \\
         --seats 10 --term monthly
 
@@ -26,15 +26,15 @@ defmodule Mix.Tasks.ExLicence.Sign do
     * `--out` (default `licence.json` beside the request).
 
   The keys are PEM files `openssl genpkey -algorithm ed25519` writes, held
-  as `ExLicence.SigningKey`, so nothing prints key material. The last line
+  as `Aker.SigningKey`, so nothing prints key material. The last line
   prints the root key's public half: the app accepts the licence only when
   its root key list holds that value.
   """
   use Mix.Task
 
-  alias ExLicence.Issuer
-  alias ExLicence.Request
-  alias ExLicence.SigningKey
+  alias Aker.Issuer
+  alias Aker.Request
+  alias Aker.SigningKey
 
   @shortdoc "Sign a licence from an activation request"
 
@@ -52,12 +52,12 @@ defmodule Mix.Tasks.ExLicence.Sign do
     out: :string
   ]
 
-  @usage "usage: mix ex_licence.sign <request> --product <name> --root-key <pem> " <>
+  @usage "usage: mix aker.sign <request> --product <name> --root-key <pem> " <>
            "--customer <name> --seats <n> --term monthly|yearly|<days> " <>
            "[--features <a,b>] [--working-key <pem>] [--serial <n>] [--key-id <id>] " <>
            "[--moves <n>] [--out <file>]"
 
-  # What each bound `ExLicence.Issuer` checks says, in the task's own words.
+  # What each bound `Aker.Issuer` checks says, in the task's own words.
   @invalid %{
     customer: "--customer is 1 to 400 bytes",
     seats: "--seats is 0 or more",

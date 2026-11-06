@@ -1,4 +1,4 @@
-defmodule ExLicence.LicenceFileTest do
+defmodule Aker.LicenceFileTest do
   @moduledoc """
   An app accepts a licence only when every signature and field in it
   holds for this install. Each refusal test changes one field of a licence
@@ -8,14 +8,14 @@ defmodule ExLicence.LicenceFileTest do
   use ExUnit.Case, async: false
 
   import ExUnit.CaptureLog
-  import ExLicence.TestSupport.Keys
-  import ExLicence.TestSupport.Licences
+  import Aker.TestSupport.Keys
+  import Aker.TestSupport.Licences
 
-  alias ExLicence.InstallKey.Software
-  alias ExLicence.Issuer
-  alias ExLicence.LicenceFile
-  alias ExLicence.Request
-  alias ExLicence.Terms
+  alias Aker.InstallKey.Software
+  alias Aker.Issuer
+  alias Aker.LicenceFile
+  alias Aker.Request
+  alias Aker.Terms
 
   @moduletag :tmp_dir
   @moduletag :capture_log
@@ -154,7 +154,7 @@ defmodule ExLicence.LicenceFileTest do
       for purpose <- [nil, "plugin-signing"] do
         bytes =
           %{
-            "public_key" => ExLicence.SigningKey.public_key(working_key),
+            "public_key" => Aker.SigningKey.public_key(working_key),
             "key_id" => "test-1",
             "not_before" => DateTime.to_iso8601(DateTime.add(now, -1, :day)),
             "not_after" => DateTime.to_iso8601(DateTime.add(now, 30, :day))
@@ -164,7 +164,7 @@ defmodule ExLicence.LicenceFileTest do
 
         certificate = %{
           certificate: bytes,
-          certificate_signature: ExLicence.SigningKey.sign(root_key(), bytes)
+          certificate_signature: Aker.SigningKey.sign(root_key(), bytes)
         }
 
         fields =
@@ -265,7 +265,7 @@ defmodule ExLicence.LicenceFileTest do
       opts =
         verify_opts(install,
           install_key:
-            {ExLicence.TestSupport.Licences.CopiedKey,
+            {Aker.TestSupport.Licences.CopiedKey,
              public_key: install.public_key, signer: forger.install_key}
         )
 
@@ -342,7 +342,7 @@ defmodule ExLicence.LicenceFileTest do
       bytes =
         Jason.encode!(%{
           "purpose" => "eagle-licence-working-key",
-          "public_key" => ExLicence.SigningKey.public_key(working_key),
+          "public_key" => Aker.SigningKey.public_key(working_key),
           "key_id" => "test-1",
           "not_before" => DateTime.to_iso8601(DateTime.add(now, -1, :day)),
           "not_after" => DateTime.to_iso8601(DateTime.add(now, 30, :day))
@@ -350,7 +350,7 @@ defmodule ExLicence.LicenceFileTest do
 
       certificate = %{
         certificate: bytes,
-        certificate_signature: ExLicence.SigningKey.sign(root_key(), bytes)
+        certificate_signature: Aker.SigningKey.sign(root_key(), bytes)
       }
 
       fields = licence_fields(install)

@@ -18,10 +18,10 @@ and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Aker.SigningKey` reads an Ed25519 private key from a PEM file kept
   outside the checkout, and `Aker.PublicKeys` decodes a list of
   Ed25519 public keys.
-- `ExLicence.LicenceFile` checks a signed licence file against the root
+- `Aker.LicenceFile` checks a signed licence file against the root
   public keys the app passes, in a fixed order with one refusal reason per
   check. An empty root key list accepts no licence. A licence may list up
   to 32 features beside its seats.
-- `ExLicence.Issuer` signs a licence from an activation request, and
-  `mix ex_licence.sign` runs it from the command line with keys kept
+- `Aker.Issuer` signs a licence from an activation request, and
+  `mix aker.sign` runs it from the command line with keys kept
   outside the checkout.

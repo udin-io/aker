@@ -1,6 +1,6 @@
-defmodule Mix.Tasks.ExLicence.SignTest do
+defmodule Mix.Tasks.Aker.SignTest do
   @moduledoc """
-  `mix ex_licence.sign` turns an install's activation request into a
+  `mix aker.sign` turns an install's activation request into a
   licence that install accepts, with key files kept outside the checkout,
   and prints no key material.
   """
@@ -9,17 +9,17 @@ defmodule Mix.Tasks.ExLicence.SignTest do
 
   @moduletag :capture_log
 
-  import ExLicence.TestSupport.Keys
-  import ExLicence.TestSupport.Licences, only: [verify_opts: 2]
+  import Aker.TestSupport.Keys
+  import Aker.TestSupport.Licences, only: [verify_opts: 2]
 
-  alias ExLicence.LicenceFile
-  alias ExLicence.Request
-  alias ExLicence.SigningKey
-  alias Mix.Tasks.ExLicence.Sign
+  alias Aker.LicenceFile
+  alias Aker.Request
+  alias Aker.SigningKey
+  alias Mix.Tasks.Aker.Sign
 
   setup do
     # Outside the checkout: the task refuses a key inside the folder it runs in.
-    dir = Path.join(System.tmp_dir!(), "ex_licence_sign_#{System.unique_integer([:positive])}")
+    dir = Path.join(System.tmp_dir!(), "aker_sign_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
     on_exit(fn -> File.rm_rf!(dir) end)
 
@@ -85,7 +85,7 @@ defmodule Mix.Tasks.ExLicence.SignTest do
     )
   end
 
-  test "the sign task signs a request from ExLicence.Request and the file verifies", ctx do
+  test "the sign task signs a request from Aker.Request and the file verifies", ctx do
     Sign.run(base(ctx))
 
     out = Path.join(ctx.dir, "licence.json")

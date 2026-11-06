@@ -1,14 +1,14 @@
-defmodule ExLicence.TestSupport.Licences do
+defmodule Aker.TestSupport.Licences do
   @moduledoc """
-  Licences for tests, signed the way `ExLicence.Issuer` signs them, for an
+  Licences for tests, signed the way `Aker.Issuer` signs them, for an
   install whose key and machine id sit in a test's own folder. The root key
   is made once per test run; no key file is checked in.
   """
 
-  import ExLicence.TestSupport.Keys, only: [new_key: 0]
+  import Aker.TestSupport.Keys, only: [new_key: 0]
 
-  alias ExLicence.Issuer
-  alias ExLicence.SigningKey
+  alias Aker.Issuer
+  alias Aker.SigningKey
 
   @product "acme_vision"
 
@@ -72,7 +72,7 @@ defmodule ExLicence.TestSupport.Licences do
     Issuer.sign(fields, Keyword.get(opts, :signing_key, working_key), certificate)
   end
 
-  @doc "The options `ExLicence.LicenceFile.verify/2` takes for `install`."
+  @doc "The options `Aker.LicenceFile.verify/2` takes for `install`."
   def verify_opts(install, extra \\ []) do
     Keyword.merge(
       [
@@ -88,13 +88,13 @@ defmodule ExLicence.TestSupport.Licences do
   defp iso(time), do: DateTime.to_iso8601(time)
 end
 
-defmodule ExLicence.TestSupport.Licences.CopiedKey do
+defmodule Aker.TestSupport.Licences.CopiedKey do
   @moduledoc """
   An install key that shows one public key and signs with another: what a
   copied install holds when it kept the licence and its public key but not
   the private key.
   """
-  @behaviour ExLicence.InstallKey
+  @behaviour Aker.InstallKey
 
   @impl true
   def kind, do: :software

@@ -1,6 +1,6 @@
-defmodule ExLicence.Terms do
+defmodule Aker.Terms do
   @moduledoc """
-  What a verified licence says. Only `ExLicence.LicenceFile` builds one,
+  What a verified licence says. Only `Aker.LicenceFile` builds one,
   after every signature and field passed, so holding one means a trusted
   root key's working key issued it for this install.
 

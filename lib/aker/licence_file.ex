@@ -1,4 +1,4 @@
-defmodule ExLicence.LicenceFile do
+defmodule Aker.LicenceFile do
   @moduledoc """
   Reads a signed licence file and checks every signature and field in it.
 
@@ -45,8 +45,8 @@ defmodule ExLicence.LicenceFile do
 
   require Logger
 
-  alias ExLicence.InstallKey
-  alias ExLicence.Terms
+  alias Aker.InstallKey
+  alias Aker.Terms
 
   @max_file_bytes 64 * 1024
   # 64 bytes of Ed25519 signature, base64 with padding.
@@ -92,7 +92,7 @@ defmodule ExLicence.LicenceFile do
   def max_bytes, do: @max_file_bytes
 
   @doc """
-  The four parts as the file's bytes. `ExLicence.Issuer` writes a
+  The four parts as the file's bytes. `Aker.Issuer` writes a
   licence through this, so the issuer and the reader share one shape.
   """
   @spec encode(%{
@@ -116,14 +116,14 @@ defmodule ExLicence.LicenceFile do
   end
 
   @doc """
-  The licence in `bytes` as `ExLicence.Terms`, when every check
+  The licence in `bytes` as `Aker.Terms`, when every check
   passes for this install.
 
   Options:
 
     * `:product`: the product this app is (required);
     * `:root_keys`: the trusted Ed25519 root public keys, raw 32-byte
-      binaries (required; see `ExLicence.PublicKeys.decode/1`);
+      binaries (required; see `Aker.PublicKeys.decode/1`);
     * `:machine_id_hash`: this host's machine id hash (required);
     * `:install_key`: `{module, opts}` of this install's key (required);
     * `:now`: the time to check against (default now);

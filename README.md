@@ -40,9 +40,9 @@ public key and machine id hash only when the key the request names signed it.
 ## Checking a licence file
 
 ```elixir
-{:ok, root_keys} = ExLicence.PublicKeys.decode(Application.fetch_env!(:my_app, :root_keys))
+{:ok, root_keys} = Aker.PublicKeys.decode(Application.fetch_env!(:my_app, :root_keys))
 
-case ExLicence.LicenceFile.verify(File.read!("licence.json"),
+case Aker.LicenceFile.verify(File.read!("licence.json"),
        product: "my_app",
        root_keys: root_keys,
        install_key: install_key,
@@ -59,7 +59,7 @@ Each refusal has its own reason, such as `:unknown_root`, `:wrong_machine` or
 ## Signing a licence on your own machine
 
 ```sh
-mix ex_licence.sign activation-request.json --product my_app \
+mix aker.sign activation-request.json --product my_app \
   --root-key ../keys/root.pem --customer "Acme Logistics" --seats 10 \
   --term yearly --features reports,export
 ```

@@ -1,17 +1,17 @@
-defmodule ExLicence.Issuer do
+defmodule Aker.Issuer do
   @moduledoc """
   Signs a licence file from an activation request. A licensing server
-  calls it, and `mix ex_licence.sign` calls it on a developer's machine.
+  calls it, and `mix aker.sign` calls it on a developer's machine.
 
   It signs only with the keys its caller hands it, held as
-  `ExLicence.SigningKey`. A host may ship it in every release, which is
+  `Aker.SigningKey`. A host may ship it in every release, which is
   safe: a host trusts only the root public keys it passes, so nobody
   without a trusted root's private key makes a licence the host accepts.
   """
 
-  alias ExLicence.LicenceFile
-  alias ExLicence.Request
-  alias ExLicence.SigningKey
+  alias Aker.LicenceFile
+  alias Aker.Request
+  alias Aker.SigningKey
 
   # A working key's certificate lasts at most 13 months.
   @certificate_days 395
@@ -22,11 +22,11 @@ defmodule ExLicence.Issuer do
   The licence file for `request_bytes`, a request for `opts[:product]`.
 
   Options: `:product`, `:root_key` and `:working_key`
-  (`ExLicence.SigningKey`), `:customer`, `:seats`, `:term_days`, and
+  (`Aker.SigningKey`), `:customer`, `:seats`, `:term_days`, and
   optionally `:features` (`[]`), `:serial` (1), `:moves_per_term` (20),
   `:key_id` (`"dev"`) and `:now`.
 
-  It signs only a licence `ExLicence.LicenceFile.verify/2` reads back, and
+  It signs only a licence `Aker.LicenceFile.verify/2` reads back, and
   answers `{:error, {:invalid, option}}` for the first option outside the
   reader's bounds, or `{:error, {:invalid, :size}}` when the licence would
   be over the reader's 4 KB.
