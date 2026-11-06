@@ -7,8 +7,8 @@ root key you trust, and a gate that checks the licence at boot and every hour.
 The library holds no key of its own. Your app passes its product name and the
 root public keys it trusts.
 
-This first part covers the install key and the activation request. The licence
-file and the gate follow before 0.1.0.
+This part covers the install key, the activation request and the licence file.
+The gate follows before 0.1.0.
 
 ## The install key and an activation request
 
@@ -36,6 +36,36 @@ File.write!("activation-request.json", request)
 The licensing server reads the request back with
 `ExLicence.Request.verify(bytes, product: "my_app")`, which answers the install
 public key and machine id hash only when the key the request names signed it.
+
+## Checking a licence file
+
+```elixir
+{:ok, root_keys} = ExLicence.PublicKeys.decode(Application.fetch_env!(:my_app, :root_keys))
+
+case ExLicence.LicenceFile.verify(File.read!("licence.json"),
+       product: "my_app",
+       root_keys: root_keys,
+       install_key: install_key,
+       machine_id_hash: machine_id_hash
+     ) do
+  {:ok, terms} -> terms.seats
+  {:error, reason} -> reason
+end
+```
+
+Each refusal has its own reason, such as `:unknown_root`, `:wrong_machine` or
+`:term_ended`, and its own log line. An empty root key list refuses every file.
+
+## Signing a licence on your own machine
+
+```sh
+mix ex_licence.sign activation-request.json --product my_app \
+  --root-key ../keys/root.pem --customer "Acme Logistics" --seats 10 \
+  --term yearly --features reports,export
+```
+
+The task refuses a key inside the folder it runs in, and its last line prints
+the root key's public half, which the app's root key list must hold.
 
 ## Installation
 
