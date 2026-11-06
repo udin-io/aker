@@ -7,8 +7,27 @@ root key you trust, and a gate that checks the licence at boot and every hour.
 The library holds no key of its own. Your app passes its product name and the
 root public keys it trusts.
 
-This part covers the install key, the activation request and the licence file.
-The gate follows before 0.1.0.
+Start with [the getting started guide](guides/getting_started.md). The wire
+formats are in [the licence format guide](guides/licence_format.md).
+
+## The gate
+
+```elixir
+children = [
+  {Aker.Gate,
+   name: MyApp.Licence,
+   product: "my_app",
+   product_version: "1.2.0",
+   root_keys: root_keys,
+   licence_dir: "/var/lib/my_app/licence",
+   store: {MyApp.LicenceStore, []},
+   server: [base_url: "https://licensing.example.com"],
+   on_lock: &MyApp.Workers.stop_all/0}
+]
+
+Aker.Gate.locked?(MyApp.Licence)
+# => true until a licence passes
+```
 
 ## The install key and an activation request
 
@@ -72,7 +91,7 @@ the root key's public half, which the app's root key list must hold.
 ```elixir
 def deps do
   [
-    {:aker, github: "udin-io/aker"}
+    {:aker, "~> 0.1"}
   ]
 end
 ```
