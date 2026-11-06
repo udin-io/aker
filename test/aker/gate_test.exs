@@ -161,6 +161,21 @@ defmodule Aker.GateTest do
       assert log =~ "machine_id_path"
     end
 
+    test "a store record without the fields the gate reads locks, and crashes nothing", ctx do
+      licensed!(ctx, 20)
+      {:ok, agent} = Agent.start_link(fn -> nil end)
+
+      defmodule OddStore do
+        @moduledoc false
+        def current(_opts), do: {:ok, %{licence_id: "l"}}
+      end
+
+      opts = Keyword.put(ctx.opts, :store, {OddStore, agent: agent})
+
+      assert Gate.recheck(opts) == {:locked, :bad_record}
+      assert_received :locked
+    end
+
     test "a store that cannot be read locks a boot as store_unreadable, never no_licence",
          ctx do
       {AgentStore, store_opts} = ctx.store
@@ -191,6 +206,19 @@ defmodule Aker.GateTest do
 
       assert Gate.status(ctx.name) == :licensed
       refute_received :locked
+    end
+
+    test "a passing failure after the term ends still locks, as term_ended", ctx do
+      record = licensed!(ctx, 3)
+      File.rm!(ctx.install.machine_id_path)
+
+      # The term still runs: the failure keeps the install licensed.
+      assert Gate.recheck(ctx.opts) == :licensed
+      refute_received :locked
+
+      later = Keyword.put(ctx.opts, :now, DateTime.add(record.term_end, 1, :second))
+      assert Gate.recheck(later) == {:locked, :term_ended}
+      assert_received :locked
     end
 
     test "a term that ends locks it and calls on_lock", ctx do
@@ -321,13 +349,12 @@ defmodule Aker.GateTest do
       licensed!(ctx, 3, 5)
       other = install(Path.join(ctx.tmp_dir, "other"))
 
-      for answer <- [
-            licence(ctx.install, fields: %{"serial" => 4}),
-            licence(other, fields: %{"serial" => 6})
+      for {answer, refusal} <- [
+            {licence(ctx.install, fields: %{"serial" => 4}), :older_serial},
+            {licence(other, fields: %{"serial" => 6}), :wrong_install_key}
           ] do
         LicensingServer.start({:licence, answer}, ctx.install.public_key)
-        assert {:error, refusal} = Gate.renew(ctx.opts)
-        assert refusal in [:older_serial, :wrong_install_key]
+        assert Gate.renew(ctx.opts) == {:error, refusal}
       end
 
       assert %{serial: 5} = Gate.current(ctx.opts)
@@ -455,12 +482,48 @@ defmodule Aker.GateTest do
       assert [%{path: "/api/v1/activate"}] = LicensingServer.calls(server)
     end
 
-    test "a refusal code stays a string, cut to 64 characters", ctx do
-      code = "unknown_code_" <> String.duplicate("z", 100)
-      LicensingServer.start({:refuse, 403, code}, ctx.install.public_key)
+    test "a refusal code stays a string, and an odd or long one becomes the status", ctx do
+      for {code, kept} <- [
+            {"code_used_never_an_atom", "code_used_never_an_atom"},
+            {String.duplicate("z", 64), String.duplicate("z", 64)},
+            {String.duplicate("z", 65), "http_403"},
+            {"a" <> String.duplicate("\u0301", 5_000), "http_403"},
+            {"two words", "http_403"}
+          ] do
+        LicensingServer.start({:refuse, 403, code}, ctx.install.public_key)
+        assert Gate.activate(ctx.opts, "ABCD", :admin) == {:error, {:refused, kept}}
+      end
+    end
 
-      assert {:error, {:refused, refused}} = Gate.activate(ctx.opts, "ABCD", :admin)
-      assert refused == String.slice(code, 0, 64)
+    test "the host's Req options cannot turn off a limit", ctx do
+      server =
+        LicensingServer.start(
+          {:raw, 302, [{"location", "https://licensing.test/elsewhere"}], ""},
+          ctx.install.public_key
+        )
+
+      loose = [redirect: true, retry: :transient, url: "https://elsewhere.test/x"]
+
+      opts =
+        Keyword.put(
+          ctx.opts,
+          :server,
+          LicensingServer.server(req_options: [plug: {Req.Test, LicensingServer}] ++ loose)
+        )
+
+      assert Gate.activate(opts, "ABCD", :admin) == {:error, {:refused, "http_302"}}
+      assert [%{path: "/api/v1/activate"}] = LicensingServer.calls(server)
+
+      LicensingServer.start({:licence, String.duplicate("x", 70_000)}, ctx.install.public_key)
+
+      big =
+        Keyword.put(
+          ctx.opts,
+          :server,
+          LicensingServer.server(req_options: [plug: {Req.Test, LicensingServer}, into: :self])
+        )
+
+      assert Gate.activate(big, "ABCD", :admin) == {:error, :bad_answer}
     end
 
     test "an http base URL is refused, and makes no call", ctx do
@@ -470,7 +533,21 @@ defmodule Aker.GateTest do
         Keyword.put(ctx.opts, :server, LicensingServer.server(base_url: "http://licensing.test"))
 
       assert Gate.activate(http, "ABCD", :admin) == {:error, :insecure_url}
+
+      with_user =
+        URI.to_string(%URI{scheme: "https", userinfo: "user:secret", host: "licensing.test"})
+
+      for url <- [with_user, "ftp://licensing.test", "https://"] do
+        bad = Keyword.put(ctx.opts, :server, LicensingServer.server(base_url: url))
+        assert Gate.activate(bad, "ABCD", :admin) == {:error, :insecure_url}, url
+      end
+
       assert LicensingServer.calls(server) == []
+
+      upper =
+        Keyword.put(ctx.opts, :server, LicensingServer.server(base_url: "HTTPS://licensing.test"))
+
+      assert {:ok, _record} = Gate.activate(upper, "ABCD", :admin)
 
       allowed =
         Keyword.put(

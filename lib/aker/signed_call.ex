@@ -73,7 +73,8 @@ defmodule Aker.SignedCall do
     * `:nonce_fresh?` (required): a 1-arity function over the nonce's text
       that answers true the first time it sees a nonce and false after, kept
       over the server's own nonce table. It runs only once every other check
-      has passed, so a forged call records no nonce.
+      has passed, so a forged call records no nonce. A timestamp may sit up to
+      `:window_s` ahead of now, so keep each nonce for twice `:window_s`.
     * `:now`: Unix seconds (default now);
     * `:window_s`: how far the timestamp may sit from now (default 600).
 
@@ -133,8 +134,10 @@ defmodule Aker.SignedCall do
   end
 
   defp in_window(text, now, window) do
-    case Integer.parse(text) do
-      {time, ""} when abs(now - time) <= window -> :ok
+    with true <- Regex.match?(~r/\A[0-9]{1,12}\z/, text),
+         {time, ""} when abs(now - time) <= window <- Integer.parse(text) do
+      :ok
+    else
       _other -> {:error, :stale}
     end
   end

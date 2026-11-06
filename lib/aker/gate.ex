@@ -105,7 +105,11 @@ defmodule Aker.Gate do
                 "The setting names a log line tells the operator to set, for `:licence_dir`, " <>
                   "`:machine_id_path` and `:server_url` (default each option's own name)."
             ],
-            now: [type: {:struct, DateTime}, doc: "The time to check against, for tests."]
+            now: [
+              type: {:struct, DateTime},
+              doc:
+                "The time to check against, for tests only: a host that sets it freezes the gate's clock."
+            ]
           )
 
   @type status :: :licensed | {:locked, atom()}
@@ -126,6 +130,7 @@ defmodule Aker.Gate do
   @spec reset(atom()) :: :ok
   def reset(name) do
     :persistent_term.erase({__MODULE__, name})
+    :persistent_term.erase({__MODULE__, name, :term_end})
     :ok
   end
 
@@ -221,6 +226,7 @@ defmodule Aker.Gate do
          {:ok, record} <- store(opts, bytes, terms, latest(now, current), actor) do
       was_locked? = locked?(opts[:name])
       put_status(opts[:name], :licensed)
+      put_term_end(opts, terms)
       Logger.info("licence loaded: #{terms.licence_id}, serial #{terms.serial}")
       if was_locked?, do: callback(opts, :on_unlock)
       {:ok, record}
@@ -292,8 +298,21 @@ defmodule Aker.Gate do
     {module, store_opts} = opts[:store]
 
     case module.current(store_opts) do
-      {:ok, record} when is_map(record) or is_nil(record) ->
+      {:ok, nil} ->
+        {:ok, nil}
+
+      {:ok, %{envelope: envelope, serial: serial, last_seen_at: _seen} = record}
+      when is_binary(envelope) and is_integer(serial) ->
         {:ok, record}
+
+      # A record without the fields the gate reads is the store's bug, not
+      # a passing failure: it locks.
+      {:ok, _other_shape} ->
+        Logger.error(
+          "licence: the store answered a record without envelope, serial and last_seen_at"
+        )
+
+        {:error, :bad_record}
 
       other ->
         Logger.error("licence: cannot read the stored licence: #{inspect(other)}")
@@ -314,7 +333,7 @@ defmodule Aker.Gate do
     with {:ok, context} <- context(opts),
          {:ok, record} <- fetch_current(opts),
          %{} <- record || {:error, :no_licence},
-         {:ok, _terms} <-
+         {:ok, terms} <-
            LicenceFile.verify(record.envelope,
              product: opts[:product],
              root_keys: opts[:root_keys],
@@ -324,6 +343,7 @@ defmodule Aker.Gate do
              last_seen: record.last_seen_at
            ) do
       touch(opts, record, now)
+      put_term_end(opts, terms)
       :licensed
     else
       {:error, reason} ->
@@ -345,8 +365,16 @@ defmodule Aker.Gate do
 
     case {was_locked?, evaluate(opts)} do
       {false, {:locked, reason}} when reason in @passing_failures ->
-        Logger.warning("licence: hourly check could not run (#{reason}); still licensed")
-        :licensed
+        if term_over?(opts) do
+          # The check could not run, but the term the last passing check
+          # read has ended: a machine failure never extends a term.
+          put_status(name, {:locked, :term_ended})
+          callback(opts, :on_lock)
+          {:locked, :term_ended}
+        else
+          Logger.warning("licence: hourly check could not run (#{reason}); still licensed")
+          :licensed
+        end
 
       {false, {:locked, _reason} = locked} ->
         put_status(name, locked)
@@ -428,6 +456,22 @@ defmodule Aker.Gate do
   defp touch(opts, record, now) do
     {module, store_opts} = opts[:store]
     module.touch(record, latest(now, record), store_opts)
+  end
+
+  # The term the last passing check read, so a later check that cannot run
+  # still knows when the term ends.
+  defp put_term_end(opts, terms) do
+    key = {__MODULE__, opts[:name], :term_end}
+
+    if :persistent_term.get(key, nil) != terms.term_end,
+      do: :persistent_term.put(key, terms.term_end)
+  end
+
+  defp term_over?(opts) do
+    case :persistent_term.get({__MODULE__, opts[:name], :term_end}, nil) do
+      %DateTime{} = term_end -> DateTime.compare(now(opts), term_end) != :lt
+      nil -> false
+    end
   end
 
   defp latest(now, nil), do: DateTime.truncate(now, :second)

@@ -61,6 +61,13 @@ defmodule Aker.SignedCallTest do
     assert verify(call(ctx.headers), now: @now + 61, window_s: 60) == {:error, :stale}
   end
 
+  test "a timestamp that is not plain digits is refused", ctx do
+    for text <- ["+#{@now}", " #{@now}", "#{@now}.0", String.duplicate("1", 13)] do
+      headers = put(ctx.headers, "x-licence-timestamp", text)
+      assert verify(call(headers)) == {:error, :stale}, text
+    end
+  end
+
   test "a reused nonce is refused, and a fresh one is not", ctx do
     {:ok, seen} = Agent.start_link(fn -> MapSet.new() end)
 

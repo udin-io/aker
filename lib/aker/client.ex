@@ -13,8 +13,8 @@ defmodule Aker.Client do
   server costs one call per attempt. The answer is read raw and capped at
   64 KB as it arrives. A server's answer is `{:ok, licence_file_bytes}` or
   `{:error, reason}`, where a refusal code the server names is
-  `{:refused, code}` with the code kept as text of at most 64 characters,
-  never turned into an atom.
+  `{:refused, code}` with the code kept as text: at most 64 bytes of
+  `A-Z a-z 0-9 _ . : -`, else `"http_<status>"`, never turned into an atom.
 
   `server` options:
 
@@ -68,16 +68,30 @@ defmodule Aker.Client do
     end
   end
 
-  defp scheme("https://" <> _rest = url, _server), do: {:ok, url}
+  # Read by URI, which lowercases the scheme, and refused with
+  # credentials in it, which would travel in every call and log line.
+  defp scheme(url, server) do
+    case URI.parse(url) do
+      %URI{userinfo: nil, host: host, scheme: scheme} when is_binary(host) and host != "" ->
+        allowed?(scheme, url, server)
 
-  defp scheme("http://" <> _rest = url, server) do
-    if Keyword.get(server, :allow_http, false), do: {:ok, url}, else: insecure()
+      _other ->
+        insecure()
+    end
   end
 
-  defp scheme(_url, _server), do: insecure()
+  defp allowed?("https", url, _server), do: {:ok, url}
+
+  defp allowed?("http", url, server),
+    do: if(Keyword.get(server, :allow_http, false), do: {:ok, url}, else: insecure())
+
+  defp allowed?(_scheme, _url, _server), do: insecure()
 
   defp insecure do
-    Logger.error("licensing: the licensing server's address must start with https://")
+    Logger.error(
+      "licensing: the licensing server's address must start with https:// and name no user"
+    )
+
     {:error, :insecure_url}
   end
 
@@ -90,7 +104,10 @@ defmodule Aker.Client do
   end
 
   defp post(server, base, path, body, headers) do
-    [
+    # The host's options go first, so none of them can turn off a limit
+    # below: the address, the size cap, retries, redirects or the timeout.
+    Keyword.get(server, :req_options, [])
+    |> Keyword.merge(
       url: base <> path,
       method: :post,
       body: body,
@@ -104,8 +121,7 @@ defmodule Aker.Client do
       compressed: false,
       raw: true,
       into: &capped/2
-    ]
-    |> Keyword.merge(Keyword.get(server, :req_options, []))
+    )
     |> Req.request()
     |> answer(path)
   end
@@ -133,7 +149,7 @@ defmodule Aker.Client do
   defp answer({:ok, %Req.Response{status: status, body: body}}, path) when is_binary(body) do
     code =
       case Jason.decode(String.slice(body, 0, 4096)) do
-        {:ok, %{"error" => code}} when is_binary(code) -> String.slice(code, 0, 64)
+        {:ok, %{"error" => code}} when is_binary(code) -> code(code, status)
         _other -> "http_#{status}"
       end
 
@@ -144,5 +160,11 @@ defmodule Aker.Client do
   defp answer({:error, exception}, path) do
     Logger.warning("licensing: #{path} unreachable: #{Exception.message(exception)}")
     {:error, :unreachable}
+  end
+
+  # A code is kept only in a plain shape of at most 64 bytes; anything else
+  # becomes the status, so a server cannot hand the app a huge or odd code.
+  defp code(code, status) do
+    if Regex.match?(~r/\A[A-Za-z0-9_.:-]{1,64}\z/, code), do: code, else: "http_#{status}"
   end
 end
