@@ -509,9 +509,16 @@ defmodule Aker.LicenceFileTest do
 
   describe "a host's own mistakes" do
     test "a missing required option raises on the first file, good or bad", %{install: install} do
-      opts = install |> verify_opts() |> Keyword.delete(:product)
+      for option <- [:product, :root_keys, :machine_id_hash, :install_key] do
+        opts = install |> verify_opts() |> Keyword.delete(option)
+        assert_raise KeyError, fn -> LicenceFile.verify("not json", opts) end
+      end
+    end
 
-      assert_raise KeyError, fn -> LicenceFile.verify("not json", opts) end
+    test "an install key that answers neither ok nor error is unreadable", %{install: install} do
+      opts = verify_opts(install, install_key: {Aker.TestSupport.Licences.OddKey, []})
+
+      assert LicenceFile.verify(licence(install), opts) == {:error, :install_key_unreadable}
     end
 
     test "a latest time seen that is not a DateTime refuses as clock_behind", %{install: install} do

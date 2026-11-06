@@ -127,6 +127,9 @@ defmodule Mix.Tasks.Aker.SignTest do
 
     assert {:ok, terms} = verify(ctx, out, stored_serial: 1)
     assert terms.features == ["reports", "export.csv"]
+
+    Sign.run(base(ctx, ["--features", "", "--out", out, "--serial", "3"]))
+    assert {:ok, %{features: []}} = verify(ctx, out, stored_serial: 2)
     assert terms.serial == 2
     assert terms.working_key_id == "w2"
     assert DateTime.diff(terms.term_end, terms.term_start, :day) == 365
