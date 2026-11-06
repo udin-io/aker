@@ -31,6 +31,9 @@ defmodule Aker.MixProject do
 
   defp deps do
     [
+      {:plug, "~> 1.0", only: [:test]},
+      {:nimble_options, "~> 1.0"},
+      {:req, "~> 0.5"},
       {:ex_doc, "~> 0.40", only: [:dev]},
       {:mix_audit, "~> 2.0", only: [:dev, :test]},
       {:sobelow, "~> 0.18", only: [:dev, :test]},
