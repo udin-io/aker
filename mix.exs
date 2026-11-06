@@ -1,12 +1,12 @@
-defmodule ExLicence.MixProject do
+defmodule Aker.MixProject do
   use Mix.Project
 
   @version "0.1.0-dev"
-  @source_url "https://github.com/udin-io/ex_licence"
+  @source_url "https://github.com/udin-io/aker"
 
   def project do
     [
-      app: :ex_licence,
+      app: :aker,
       version: @version,
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule ExLicence.MixProject do
       description: description(),
       package: package(),
       docs: docs(),
-      name: "ExLicence",
+      name: "Aker",
       source_url: @source_url
     ]
   end

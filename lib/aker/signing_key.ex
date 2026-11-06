@@ -1,4 +1,4 @@
-defmodule ExLicence.SigningKey do
+defmodule Aker.SigningKey do
   @moduledoc """
   A private Ed25519 key: a licence issuer's root key, or a working key
   the root key certifies. Only a signing task reads one, from a file kept off the
@@ -123,6 +123,6 @@ defmodule ExLicence.SigningKey do
     do: :crypto.sign(:eddsa, :none, message, [seed, :ed25519])
 
   defimpl Inspect do
-    def inspect(_key, _opts), do: "#ExLicence.SigningKey<redacted>"
+    def inspect(_key, _opts), do: "#Aker.SigningKey<redacted>"
   end
 end

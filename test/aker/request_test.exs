@@ -1,4 +1,4 @@
-defmodule ExLicence.RequestTest do
+defmodule Aker.RequestTest do
   @moduledoc """
   The activation request: it names the product and version the app passes,
   carries the install key and machine id, and verifies only when the key
@@ -6,10 +6,10 @@ defmodule ExLicence.RequestTest do
   """
   use ExUnit.Case, async: true
 
-  import ExLicence.TestSupport.Keys
+  import Aker.TestSupport.Keys
 
-  alias ExLicence.InstallKey.Software
-  alias ExLicence.Request
+  alias Aker.InstallKey.Software
+  alias Aker.Request
 
   @moduletag :tmp_dir
 

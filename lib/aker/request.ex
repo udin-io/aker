@@ -1,4 +1,4 @@
-defmodule ExLicence.Request do
+defmodule Aker.Request do
   @moduledoc """
   The activation request an install sends the licensing server to get its
   licence.
@@ -11,7 +11,7 @@ defmodule ExLicence.Request do
   16-byte random nonce.
   """
 
-  alias ExLicence.InstallKey
+  alias Aker.InstallKey
 
   @max_bytes 8 * 1024
   @product ~r/\A[a-z0-9_-]{1,64}\z/
@@ -37,7 +37,7 @@ defmodule ExLicence.Request do
     * `:product_version` - the app's version, 1 to 64 characters of
       `0-9 A-Z a-z . + -` (required);
     * `:install_key` - `{module, opts}` (required);
-    * `:machine_id_hash` - from `ExLicence.MachineId.hash/1`, 64 hex
+    * `:machine_id_hash` - from `Aker.MachineId.hash/1`, 64 hex
       characters (required);
     * `:now` - the time the request names (default now).
   """

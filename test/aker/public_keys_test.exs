@@ -1,11 +1,11 @@
-defmodule ExLicence.PublicKeysTest do
+defmodule Aker.PublicKeysTest do
   @moduledoc """
   Decoding a host's list of Ed25519 public keys: raw 32-byte keys, base64,
   with a malformed entry named by its place, never its value.
   """
   use ExUnit.Case, async: true
 
-  alias ExLicence.PublicKeys
+  alias Aker.PublicKeys
 
   @good "c5l19pS6v3pARUswDBjEEVJ/lTJLE8B0KyE9NOhV2OA="
 

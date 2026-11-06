@@ -1,4 +1,4 @@
-defmodule ExLicence.InstallKey.Software do
+defmodule Aker.InstallKey.Software do
   @moduledoc """
   The install key as a PEM file, `install_key.pem`, in the licence folder,
   for a machine with no TPM chip.
@@ -20,7 +20,7 @@ defmodule ExLicence.InstallKey.Software do
   (the library makes it 0700) leaves no such moment.
   """
 
-  @behaviour ExLicence.InstallKey
+  @behaviour Aker.InstallKey
 
   @file_name "install_key.pem"
 

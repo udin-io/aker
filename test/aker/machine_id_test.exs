@@ -1,11 +1,11 @@
-defmodule ExLicence.MachineIdTest do
+defmodule Aker.MachineIdTest do
   @moduledoc """
   The machine id hash a licence names: the SHA-256 of the trimmed id in
   the file the app passes.
   """
   use ExUnit.Case, async: true
 
-  alias ExLicence.MachineId
+  alias Aker.MachineId
 
   @moduletag :tmp_dir
 

@@ -1,4 +1,4 @@
-defmodule ExLicence.PublicKeys do
+defmodule Aker.PublicKeys do
   @moduledoc """
   Ed25519 public keys as a host's config lists them: raw 32-byte keys,
   base64. A host decodes its root key list through `decode/1` at boot and

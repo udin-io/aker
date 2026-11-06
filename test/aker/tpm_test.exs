@@ -1,4 +1,4 @@
-defmodule ExLicence.TpmTest do
+defmodule Aker.TpmTest do
   @moduledoc """
   The install key inside a TPM chip. The `:tpm` tests drive a real TPM 2.0
   simulator (swtpm) through tpm2-tools. `mix test` leaves them out; CI's
@@ -7,9 +7,9 @@ defmodule ExLicence.TpmTest do
   """
   use ExUnit.Case, async: true
 
-  alias ExLicence.InstallKey
-  alias ExLicence.InstallKey.Software
-  alias ExLicence.InstallKey.Tpm
+  alias Aker.InstallKey
+  alias Aker.InstallKey.Software
+  alias Aker.InstallKey.Tpm
 
   @moduletag :tmp_dir
   @moduletag :capture_log
@@ -184,7 +184,7 @@ defmodule ExLicence.TpmTest do
     state =
       Path.join(
         System.tmp_dir!(),
-        "ex_licence-swtpm-#{name}-#{System.unique_integer([:positive])}"
+        "aker-swtpm-#{name}-#{System.unique_integer([:positive])}"
       )
 
     File.mkdir_p!(state)
