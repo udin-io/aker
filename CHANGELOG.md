@@ -5,7 +5,9 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.1.0 — 2026-11-06
+
+The first release.
 
 ### Added
 
@@ -25,3 +27,11 @@ and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Aker.Issuer` signs a licence from an activation request, and
   `mix aker.sign` runs it from the command line with keys kept
   outside the checkout.
+- `Aker.Gate` checks the licence at boot and every hour, holds the lock
+  state where every reader finds it, renews the licence in its term's last
+  week, and calls the app back when the install locks or unlocks. A gate
+  that never ran reads locked.
+- `Aker.Store` is the contract for where an app keeps its licence.
+- `Aker.Client` makes the calls to the licensing server, and
+  `Aker.SignedCall` signs them with the install key and checks them on the
+  server's side.
