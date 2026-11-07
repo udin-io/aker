@@ -39,13 +39,56 @@ defmodule Aker.RequestTest do
     install = install(dir)
     {:ok, bytes} = build(install)
 
-    assert Request.verify(bytes, product: "acme_vision") ==
-             {:ok,
-              %{install_public_key: install.public_key, machine_id_hash: install.machine_id_hash}}
+    assert {:ok, verified} = Request.verify(bytes, product: "acme_vision")
+    assert verified.install_public_key == install.public_key
+    assert verified.machine_id_hash == install.machine_id_hash
 
     request = fields(bytes)
     assert request["install_key_kind"] == "software"
     assert byte_size(Base.decode64!(request["nonce"])) == 16
+  end
+
+  test "answers the version, key kind, time and nonce the install signed", %{tmp_dir: dir} do
+    install = install(dir)
+    now = ~U[2026-11-07 10:15:30Z]
+    {:ok, bytes} = build(install, product_version: "2.4.1", now: now)
+
+    assert {:ok, verified} = Request.verify(bytes, product: "acme_vision")
+    assert verified.product_version == "2.4.1"
+    assert verified.install_key_kind == :software
+    assert verified.created_at == now
+    assert verified.nonce == Base.decode64!(fields(bytes)["nonce"])
+    assert byte_size(verified.nonce) == 16
+
+    tpm = bytes |> fields() |> Map.put("install_key_kind", "tpm")
+
+    assert {:ok, %{install_key_kind: :tpm}} =
+             Request.verify(signed(install, tpm), product: "acme_vision")
+  end
+
+  test "refuses a request whose key kind, version, time or nonce is malformed",
+       %{tmp_dir: dir} do
+    install = install(dir)
+    {:ok, bytes} = build(install)
+    request = fields(bytes)
+
+    for {field, value} <- [
+          {"install_key_kind", "hsm"},
+          {"install_key_kind", nil},
+          {"product_version", "1.0 beta"},
+          {"product_version", 2},
+          {"created_at", "yesterday"},
+          {"created_at", nil},
+          {"nonce", Base.encode64(:crypto.strong_rand_bytes(15))},
+          {"nonce", "@@"}
+        ] do
+      assert Request.verify(signed(install, Map.put(request, field, value)),
+               product: "acme_vision"
+             ) == {:error, :bad_request},
+             "#{field} = #{inspect(value)}"
+    end
+
+    assert {:ok, _fields} = Request.verify(signed(install, request), product: "acme_vision")
   end
 
   test "a request names the product and version the app passes", %{tmp_dir: dir} do
