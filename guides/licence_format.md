@@ -27,6 +27,24 @@ An object with four fields:
 The certificate holds `purpose` (`licence-working-key`), `public_key` (the
 working key, 32 bytes), `key_id`, `not_before` and `not_after`.
 
+### Certifying a working key
+
+A licensing server signs with a working key, never the root key. You certify
+each working key offline, on the machine that holds the root key:
+
+```sh
+mix aker.certify --root-key ../keys/root.pem \
+  --working-key ../keys/working-2026-11.pem --key-id w-2026-11 --days 470
+```
+
+It prints the certificate as one line, `{"certificate": "<base64>",
+"certificate_signature": "<base64>"}`, at most 2 KB. The server keeps that line
+and the working key, and passes both to `Aker.Issuer.issue/2` as
+`:certificate` (through `Aker.Issuer.decode_certificate/1`) and
+`:working_key`, with the root public keys as `:root_keys`. The issuer refuses a
+term that ends after the certificate's `not_after`, since an install refuses
+the licence once the certificate lapses.
+
 The licence holds `licence_id`, `serial`, `product`, `customer_name`,
 `install_public_key`, `machine_id_hash`, `term_start`, `term_end`, `seats`,
 `moves_per_term`, `issued_at`, `working_key_id`, and optionally `features`: up
