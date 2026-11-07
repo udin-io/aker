@@ -80,3 +80,28 @@ Aker.Gate.refresh(MyApp.gate_options(), current_user)
 
 These trust your app to have checked who may call them. Check the caller
 before you call.
+
+## 5. Sign licences on a server
+
+A licensing server holds a working key and its certificate, never the root
+key. Certify the working key offline with `mix aker.certify` (see the licence
+format guide), then sign with it:
+
+```elixir
+{:ok, certificate} = Aker.Issuer.decode_certificate(System.fetch_env!("WORKING_CERTIFICATE"))
+
+Aker.Issuer.issue(request_bytes,
+  product: "my_app",
+  working_key: working_key,
+  certificate: certificate,
+  root_keys: root_keys,
+  customer: "Acme Logistics",
+  seats: 10,
+  licence_id: licence.id,
+  term_start: term_start,
+  term_end: term_end
+)
+```
+
+A renewal passes the licence's own id and the next term, and a higher
+`:serial`.

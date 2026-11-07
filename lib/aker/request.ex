@@ -87,11 +87,22 @@ defmodule Aker.Request do
 
   @doc """
   The request's fields, when `bytes` is a request for the product
-  `opts[:product]` signed by the key it names. The sign task reads a
-  request through this.
+  `opts[:product]` signed by the key it names: `install_public_key`,
+  `machine_id_hash`, `product_version`, `install_key_kind` (`:software`
+  or `:tpm`), `created_at` (`DateTime`, UTC) and `nonce` (16 bytes). A
+  licensing server records the version and kind, and checks the time and
+  nonce against replays. The sign task reads a request through this.
   """
   @spec verify(binary(), keyword()) ::
-          {:ok, %{install_public_key: binary(), machine_id_hash: String.t()}}
+          {:ok,
+           %{
+             install_public_key: binary(),
+             machine_id_hash: String.t(),
+             product_version: String.t(),
+             install_key_kind: :software | :tpm,
+             created_at: DateTime.t(),
+             nonce: <<_::128>>
+           }}
           | {:error, :bad_request}
   def verify(bytes, opts) when is_binary(bytes) and byte_size(bytes) <= @max_bytes do
     product = Keyword.fetch!(opts, :product)
@@ -105,18 +116,39 @@ defmodule Aker.Request do
          {:ok,
           %{
             "product" => ^product,
+            "product_version" => version,
             "install_public_key" => public_key,
-            "machine_id_hash" => machine_id_hash
+            "install_key_kind" => kind,
+            "machine_id_hash" => machine_id_hash,
+            "created_at" => created_at,
+            "nonce" => nonce
           }}
-         when is_binary(public_key) and is_binary(machine_id_hash) <- Jason.decode(request),
+         when is_binary(public_key) and is_binary(machine_id_hash) and is_binary(created_at) and
+                is_binary(nonce) <- Jason.decode(request),
          true <- hash?(machine_id_hash),
+         true <- version?(version),
+         {:ok, kind} <- key_kind(kind),
+         {:ok, created_at, _offset} <- DateTime.from_iso8601(created_at),
+         {:ok, <<_::128>> = nonce} <- Base.decode64(nonce),
          {:ok, <<4, _::512>> = public_key} <- Base.decode64(public_key),
          true <- InstallKey.verify(public_key, request, signature) do
-      {:ok, %{install_public_key: public_key, machine_id_hash: machine_id_hash}}
+      {:ok,
+       %{
+         install_public_key: public_key,
+         machine_id_hash: machine_id_hash,
+         product_version: version,
+         install_key_kind: kind,
+         created_at: created_at,
+         nonce: nonce
+       }}
     else
       _malformed -> {:error, :bad_request}
     end
   end
 
   def verify(_bytes, _opts), do: {:error, :bad_request}
+
+  defp key_kind("software"), do: {:ok, :software}
+  defp key_kind("tpm"), do: {:ok, :tpm}
+  defp key_kind(_other), do: :error
 end

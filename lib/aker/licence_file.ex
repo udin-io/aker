@@ -87,6 +87,10 @@ defmodule Aker.LicenceFile do
   @spec certificate_purpose() :: String.t()
   def certificate_purpose, do: @purpose
 
+  @doc "The longest certificate a licence file carries, as base64 characters."
+  @spec max_certificate_chars() :: pos_integer()
+  def max_certificate_chars, do: @max_certificate_chars
+
   @doc "The largest licence file `verify/2` reads, in bytes."
   @spec max_bytes() :: pos_integer()
   def max_bytes, do: @max_file_bytes
@@ -152,8 +156,8 @@ defmodule Aker.LicenceFile do
     now = Keyword.get_lazy(opts, :now, &DateTime.utc_now/0)
 
     with {:ok, parts} <- envelope(bytes),
-         :ok <- signed_by_any(parts.certificate, parts.certificate_signature, root_keys),
-         {:ok, cert} <- certificate(parts.certificate),
+         {:ok, cert} <-
+           read_certificate(parts.certificate, parts.certificate_signature, root_keys),
          :ok <- signed(parts.licence, parts.signature, cert.public_key),
          {:ok, terms} <- licence(parts.licence),
          :ok <- same(cert.key_id, terms.working_key_id, :wrong_working_key),
@@ -209,7 +213,7 @@ defmodule Aker.LicenceFile do
 
   defp sized?(_map), do: false
 
-  defp signed_by_any(message, signature, keys) when is_list(keys) do
+  defp signed_by_any(message, signature, keys) when is_binary(message) and is_list(keys) do
     if Enum.any?(keys, &ed25519?(message, signature, &1)),
       do: :ok,
       else: {:error, :unknown_root}
@@ -226,8 +230,31 @@ defmodule Aker.LicenceFile do
 
   defp ed25519?(_message, _signature, _key), do: false
 
+  @doc """
+  The working key's certificate, when a key in `root_keys` signed
+  `certificate`: its `public_key` (raw, 32 bytes), `key_id`,
+  `not_before` and `not_after`. Answers `{:error, :unknown_root}` when no
+  root key signed it and `{:error, :bad_certificate}` when its fields are
+  malformed, the same refusals `verify/2` gives. `Aker.Issuer` checks a
+  certificate through this before it signs with it.
+  """
+  @spec read_certificate(binary(), binary(), [binary()]) ::
+          {:ok,
+           %{
+             public_key: binary(),
+             key_id: String.t(),
+             not_before: DateTime.t(),
+             not_after: DateTime.t()
+           }}
+          | {:error, :unknown_root | :bad_certificate}
+  def read_certificate(certificate, certificate_signature, root_keys) do
+    with :ok <- signed_by_any(certificate, certificate_signature, root_keys) do
+      certificate(certificate)
+    end
+  end
+
   # Step 3: the certificate, read only after the root key's signature held.
-  defp certificate(json) do
+  defp certificate(json) when is_binary(json) do
     with {:ok,
           %{
             "purpose" => @purpose,
@@ -246,6 +273,8 @@ defmodule Aker.LicenceFile do
       _malformed -> {:error, :bad_certificate}
     end
   end
+
+  defp certificate(_json), do: {:error, :bad_certificate}
 
   # Step 5: the licence, read only after the working key's signature held.
   defp licence(json) do
