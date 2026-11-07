@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.3.0 — 2026-11-07
+
+An app can tell the licensing server what it runs at each check-in.
+
+### Added
+
+- `Aker.Gate` takes `:check_in_fields`, a function that returns extra
+  fields for each renewal and refresh body. The install key signs them with
+  the rest of the body. They never replace `licence_id` or `serial`. The
+  function runs in its own process for at most `:check_in_fields_timeout`
+  (default 5 s). One that fails, runs longer, or returns non-string keys at
+  any depth, a value JSON cannot hold or more than 8 KB of JSON sends the
+  call without them.
+- `Aker.Client.renew/4` and `refresh/4` take those fields.
+
+### Unchanged
+
+- An app that leaves the option out sends the same body as before.
+- Activation sends no extra fields.
+
 ## v0.2.0 — 2026-11-07
 
 A licensing server can sign licences without holding the root key.
