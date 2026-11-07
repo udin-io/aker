@@ -574,6 +574,148 @@ defmodule Aker.GateTest do
     end
   end
 
+  describe "the app's check-in fields" do
+    defp with_fields(ctx, fun), do: Keyword.put(ctx.opts, :check_in_fields, fun)
+
+    defp sent(server) do
+      assert [%{verdict: :ok, body: body}] = LicensingServer.calls(server)
+      Jason.decode!(body)
+    end
+
+    test "a renewal carries them in the signed body", ctx do
+      record = licensed!(ctx, 3)
+      renewed = licence(ctx.install, fields: %{"serial" => 2})
+      server = LicensingServer.start({:licence, renewed}, ctx.install.public_key)
+      opts = with_fields(ctx, fn -> %{"running" => %{"fingerprint" => "ab12"}} end)
+
+      assert Gate.tick(opts) == :licensed
+
+      assert sent(server) == %{
+               "licence_id" => record.licence_id,
+               "serial" => 1,
+               "running" => %{"fingerprint" => "ab12"}
+             }
+    end
+
+    test "a refresh carries them in the signed body", ctx do
+      licensed!(ctx, 20)
+      fresh = licence(ctx.install, fields: %{"serial" => 2})
+      server = LicensingServer.start({:licence, fresh}, ctx.install.public_key)
+      opts = with_fields(ctx, fn -> %{"running" => %{"state" => "licensed"}} end)
+
+      assert {:ok, %{serial: 2}} = Gate.refresh(opts, :admin)
+      assert sent(server)["running"] == %{"state" => "licensed"}
+    end
+
+    test "the function runs at each call, so each call reports what holds then", ctx do
+      licensed!(ctx, 20)
+      server = LicensingServer.start({:licence, licence(ctx.install)}, ctx.install.public_key)
+      {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+      opts =
+        with_fields(ctx, fn -> %{"call" => Agent.get_and_update(counter, &{&1 + 1, &1 + 1})} end)
+
+      Gate.refresh(opts, :admin)
+      Gate.refresh(opts, :admin)
+
+      assert Enum.map(LicensingServer.calls(server), &Jason.decode!(&1.body)["call"]) == [1, 2]
+    end
+
+    test "they never replace the licence id or serial", ctx do
+      record = licensed!(ctx, 20)
+      server = LicensingServer.start({:licence, licence(ctx.install)}, ctx.install.public_key)
+      opts = with_fields(ctx, fn -> %{"licence_id" => "someone-else", "serial" => 99} end)
+
+      Gate.refresh(opts, :admin)
+      assert sent(server) == %{"licence_id" => record.licence_id, "serial" => 1}
+    end
+
+    test "without the option the body holds only the licence id and serial (control)", ctx do
+      record = licensed!(ctx, 20)
+      server = LicensingServer.start({:licence, licence(ctx.install)}, ctx.install.public_key)
+
+      Gate.refresh(ctx.opts, :admin)
+      assert sent(server) == %{"licence_id" => record.licence_id, "serial" => 1}
+    end
+
+    for {label, fun} <- [
+          {"raises", quote(do: fn -> raise "boom" end)},
+          {"throws", quote(do: fn -> throw(:boom) end)},
+          {"exits", quote(do: fn -> exit(:boom) end)},
+          {"answers a list", quote(do: fn -> [running: 1] end)},
+          {"answers a struct", quote(do: fn -> DateTime.utc_now() end)},
+          {"answers atom keys", quote(do: fn -> %{running: 1} end)},
+          {"answers mixed keys", quote(do: fn -> %{"a" => 1, serial: 2} end)},
+          {"answers a pid", quote(do: fn -> %{"running" => self()} end)},
+          {"answers a tuple", quote(do: fn -> %{"running" => {1, 2}} end)},
+          {"answers bytes that are not UTF-8", quote(do: fn -> %{"running" => <<255, 254>>} end)},
+          {"answers mixed keys inside a map",
+           quote(do: fn -> %{"running" => %{:version => "1", "version" => "2"}} end)},
+          {"answers atom keys inside a list", quote(do: fn -> %{"running" => [%{a: 1}]} end)},
+          {"answers a struct inside a map", quote(do: fn -> %{"at" => DateTime.utc_now()} end)},
+          {"answers more than 8 KB",
+           quote(do: fn -> %{"running" => String.duplicate("a", 8 * 1024)} end)},
+          {"links to a process that crashes",
+           quote(
+             do: fn ->
+               spawn_link(fn -> exit(:crashed) end)
+               Process.sleep(1_000)
+               %{"running" => 1}
+             end
+           )},
+          {"hangs", quote(do: fn -> Process.sleep(:infinity) end)}
+        ] do
+      test "a function that #{label} still renews, without the fields", ctx do
+        record = licensed!(ctx, 3)
+        renewed = licence(ctx.install, fields: %{"serial" => 2})
+        server = LicensingServer.start({:licence, renewed}, ctx.install.public_key)
+
+        log =
+          capture_log(fn ->
+            opts = Keyword.put(with_fields(ctx, unquote(fun)), :check_in_fields_timeout, 200)
+            assert Gate.tick(opts) == :licensed
+          end)
+
+        assert log =~ "check_in_fields"
+        refute log =~ "boom"
+        assert sent(server) == %{"licence_id" => record.licence_id, "serial" => 1}
+        assert %{serial: 2} = Gate.current(ctx.opts)
+      end
+    end
+
+    test "nested string keys and lists pass, up to 8 KB", ctx do
+      licensed!(ctx, 20)
+      server = LicensingServer.start({:licence, licence(ctx.install)}, ctx.install.public_key)
+      running = %{"modules" => [%{"name" => "a"}], "pad" => String.duplicate("a", 7 * 1024)}
+
+      Gate.refresh(with_fields(ctx, fn -> %{"running" => running} end), :admin)
+      assert sent(server)["running"] == running
+    end
+
+    test "the client sends no atom key beside the licence id or serial", ctx do
+      server = LicensingServer.start({:licence, licence(ctx.install)}, ctx.install.public_key)
+      licence = %{licence_id: "real", serial: 3}
+
+      Aker.Client.refresh(LicensingServer.server(), ctx.install.install_key, licence, %{
+        :licence_id => "other",
+        :serial => 9,
+        "running" => 1
+      })
+
+      assert [%{body: body}] = LicensingServer.calls(server)
+      assert body == ~s({"licence_id":"real","running":1,"serial":3})
+    end
+
+    test "activation sends no fields", ctx do
+      server = LicensingServer.start({:licence, licence(ctx.install)}, ctx.install.public_key)
+      opts = with_fields(ctx, fn -> %{"running" => 1} end)
+
+      assert {:ok, _record} = Gate.activate(opts, "ABCD", :admin)
+      assert [%{body: body}] = LicensingServer.calls(server)
+      refute Map.has_key?(Jason.decode!(body), "running")
+    end
+  end
+
   test "the gate's options are checked, and a bad one raises", ctx do
     assert_raise NimbleOptions.ValidationError, fn ->
       Gate.check(Keyword.delete(ctx.opts, :root_keys))

@@ -6,8 +6,10 @@ defmodule Aker.Client do
       request, and gets the first licence back. It is the one call the
       install key does not sign: the code is the credential, and the
       request inside is signed by the install key.
-    * `renew/3` and `refresh/3` carry the licence id and serial, and are
-      signed by the install key (`Aker.SignedCall`).
+    * `renew/4` and `refresh/4` carry the licence id and serial, and any
+      extra `fields` the app adds, and are signed by the install key
+      (`Aker.SignedCall`). The fields never replace the licence id or
+      serial.
 
   Every call is made once: retries and redirects are off, so a failing
   server costs one call per attempt. The answer is read raw and capped at
@@ -40,18 +42,29 @@ defmodule Aker.Client do
     with {:ok, base} <- base_url(server), do: post(server, base, "/api/v1/activate", body, [])
   end
 
-  @doc "Asks for the next term's licence, signed by `install_key`."
-  @spec renew(keyword(), {module(), keyword()}, map()) :: {:ok, binary()} | {:error, term()}
-  def renew(server, install_key, licence),
-    do: signed_post(server, "/api/v1/renew", install_key, licence)
+  @doc "Asks for the next term's licence, signed by `install_key`, with `fields` in the body."
+  @spec renew(keyword(), {module(), keyword()}, map(), map()) ::
+          {:ok, binary()} | {:error, term()}
+  def renew(server, install_key, licence, fields \\ %{}),
+    do: signed_post(server, "/api/v1/renew", install_key, licence, fields)
 
-  @doc "Asks for this term's licence with the current seats, signed by `install_key`."
-  @spec refresh(keyword(), {module(), keyword()}, map()) :: {:ok, binary()} | {:error, term()}
-  def refresh(server, install_key, licence),
-    do: signed_post(server, "/api/v1/refresh", install_key, licence)
+  @doc """
+  Asks for this term's licence with the current seats, signed by
+  `install_key`, with `fields` in the body.
+  """
+  @spec refresh(keyword(), {module(), keyword()}, map(), map()) ::
+          {:ok, binary()} | {:error, term()}
+  def refresh(server, install_key, licence, fields \\ %{}),
+    do: signed_post(server, "/api/v1/refresh", install_key, licence, fields)
 
-  defp signed_post(server, path, install_key, licence) do
-    body = Jason.encode!(%{"licence_id" => licence.licence_id, "serial" => licence.serial})
+  defp signed_post(server, path, install_key, licence, fields) do
+    body =
+      fields
+      # Only string keys: Jason writes an atom key as text, so `:serial`
+      # would sit beside the real "serial" in the signed body.
+      |> Map.filter(fn {key, _value} -> is_binary(key) end)
+      |> Map.merge(%{"licence_id" => licence.licence_id, "serial" => licence.serial})
+      |> Jason.encode!()
 
     with {:ok, base} <- base_url(server),
          # The path the server reads, the base URL's own path included.
