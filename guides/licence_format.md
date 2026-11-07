@@ -55,7 +55,8 @@ received, and reads no field before the signature holds.
 
 ## A signed call
 
-`renew` and `refresh` carry four headers:
+`renew` and `refresh` send `{"licence_id", "serial"}` and any fields the
+app's `check_in_fields` adds, and carry four headers:
 
 - `x-licence-install-key`: the install public key;
 - `x-licence-timestamp`: Unix seconds;

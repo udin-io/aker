@@ -36,6 +36,7 @@ defmodule Aker.Gate do
   alias Aker.MachineId
   alias Aker.Request
 
+  @max_fields_bytes 8 * 1024
   @passing_failures [
     :store_unreadable,
     :no_licence_dir,
@@ -86,6 +87,21 @@ defmodule Aker.Gate do
             server: [type: :keyword_list, default: [], doc: "`Aker.Client`'s server options."],
             on_lock: [type: {:fun, 0}, doc: "Called when a running install locks."],
             on_unlock: [type: {:fun, 0}, doc: "Called when a locked install unlocks."],
+            check_in_fields: [
+              type: {:fun, 0},
+              doc:
+                "Called before each renewal and refresh, in its own process. The map it " <>
+                  "returns, with string keys at every depth, joins the call's JSON body, " <>
+                  "which the install key signs. It never replaces `licence_id` or `serial`. " <>
+                  "A function that fails, runs past `:check_in_fields_timeout`, or returns " <>
+                  "anything else, a value JSON cannot hold or more than 8 KB of JSON, sends " <>
+                  "the call without the fields."
+            ],
+            check_in_fields_timeout: [
+              type: :pos_integer,
+              default: 5_000,
+              doc: "Milliseconds `:check_in_fields` may run."
+            ],
             check_every: [
               type: :pos_integer,
               default: :timer.hours(1),
@@ -252,19 +268,89 @@ defmodule Aker.Gate do
 
   @doc "Asks for this term's licence with the current seats, as `actor`, and loads it."
   @spec refresh(keyword(), term()) :: {:ok, map()} | {:error, term()}
-  def refresh(opts, actor), do: check_in(validate!(opts), &Client.refresh/3, actor)
+  def refresh(opts, actor), do: check_in(validate!(opts), &Client.refresh/4, actor)
 
   @doc "Asks for the next term's licence and loads it, as `:system`."
   @spec renew(keyword()) :: {:ok, map()} | {:error, term()}
-  def renew(opts), do: check_in(validate!(opts), &Client.renew/3, :system)
+  def renew(opts), do: check_in(validate!(opts), &Client.renew/4, :system)
 
   defp check_in(opts, call, actor) do
     with {:ok, current} <- fetch_current(opts),
          %{} <- current || {:error, :no_licence},
          {:ok, context} <- context(opts),
-         {:ok, bytes} <- call.(server(opts), context.install_key, current) do
+         {:ok, bytes} <- call.(server(opts), context.install_key, current, fields(opts)) do
       load(opts, bytes, actor)
     end
+  end
+
+  # The app's extra fields. A report must never stop a renewal, so a
+  # function that fails or answers an odd shape sends none.
+  defp fields(opts) do
+    case opts[:check_in_fields] do
+      nil -> %{}
+      fun -> fun |> run_fields(opts[:check_in_fields_timeout]) |> checked_fields()
+    end
+  end
+
+  # In its own process, unlinked, so a function that hangs, or links to a
+  # process that crashes, never stalls or stops the gate's tick. The exit
+  # reason carries the answer. A failure is caught there, so no crash
+  # report prints what the function held.
+  defp run_fields(fun, timeout) do
+    {pid, ref} =
+      spawn_monitor(fn ->
+        result =
+          try do
+            {:ok, fun.()}
+          catch
+            _kind, _value -> :failed
+          end
+
+        exit({__MODULE__, :fields, result})
+      end)
+
+    receive do
+      {:DOWN, ^ref, :process, ^pid, {__MODULE__, :fields, {:ok, value}}} -> {:ok, value}
+      {:DOWN, ^ref, :process, ^pid, _reason} -> {:failed, "it failed"}
+    after
+      timeout ->
+        Process.exit(pid, :kill)
+
+        receive do
+          {:DOWN, ^ref, :process, ^pid, _reason} -> :ok
+        end
+
+        {:failed, "it ran past #{timeout} ms"}
+    end
+  end
+
+  defp checked_fields({:ok, fields}) when is_map(fields) do
+    with true <- string_keys?(fields),
+         {:ok, json} <- Jason.encode(fields),
+         true <- byte_size(json) <= @max_fields_bytes || :too_large do
+      fields
+    else
+      :too_large -> no_fields("returned more than 8 KB of JSON")
+      _other -> no_fields("returned a map that is not JSON with string keys")
+    end
+  end
+
+  defp checked_fields({:ok, _other}), do: no_fields("returned something other than a map")
+  defp checked_fields({:failed, what}), do: no_fields("gave no fields (#{what})")
+
+  # Jason writes any key as text, so an atom and a string of the same name
+  # would land twice in the signed body; only string keys pass, at any depth.
+  defp string_keys?(%_{}), do: false
+
+  defp string_keys?(map) when is_map(map),
+    do: Enum.all?(map, fn {key, value} -> is_binary(key) and string_keys?(value) end)
+
+  defp string_keys?(list) when is_list(list), do: Enum.all?(list, &string_keys?/1)
+  defp string_keys?(_value), do: true
+
+  defp no_fields(why) do
+    Logger.warning("licence: check_in_fields #{why}; the call goes without them")
+    %{}
   end
 
   defp server(opts) do

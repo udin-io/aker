@@ -59,6 +59,19 @@ end
 The gate checks the licence at boot, then every hour. In the term's last
 week each hourly tick asks the server for the next term's licence.
 
+To tell the server about the running app at each renewal and refresh, pass
+`check_in_fields`: a function that returns a map with string keys. The map
+joins the call's body, so the install key signs it with the rest.
+
+```elixir
+check_in_fields: fn -> %{"running" => %{"version" => "2.4.1"}} end
+```
+
+The fields never replace the licence id or serial. The function runs in its
+own process for at most 5 seconds. One that fails, runs longer, or returns a
+map JSON cannot hold, non-string keys or more than 8 KB sends the call
+without them, so a report never stops a renewal.
+
 ## 3. Read the lock
 
 ```elixir
