@@ -91,7 +91,7 @@ the root key's public half, which the app's root key list must hold.
 ```elixir
 def deps do
   [
-    {:aker, "~> 0.1"}
+    {:aker, "~> 0.2"}
   ]
 end
 ```

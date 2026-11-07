@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.2.0 — 2026-11-07
+
+A licensing server can sign licences without holding the root key.
+
+### Added
+
+- `mix aker.certify` signs a working key's certificate with the root key,
+  offline, and prints it on one line. It never prints the working key.
+- `Aker.Issuer.issue/2` takes `:certificate` and `:root_keys` in place of
+  `:root_key`. It refuses a certificate no listed root signed, one for
+  another working key, one not in date, and a term that ends after the
+  certificate does.
+- `Aker.Issuer.issue/2` takes `:licence_id`, so a renewal keeps its id,
+  and `:term_start` with `:term_end` in place of `:term_days`.
+- `Aker.Issuer.encode_certificate/1` and `decode_certificate/1` keep a
+  certificate as one line of at most 2 KB.
+- `Aker.LicenceFile.read_certificate/3` reads a certificate a root key
+  signed, with the checks `verify/2` runs.
+- `Aker.Request.verify/2` also answers the product version, the install
+  key's kind, the time and the nonce, and refuses a request whose key kind
+  is neither `software` nor `tpm`.
+
+### Unchanged
+
+- `mix aker.sign` signs as before, with the root key.
+
 ## v0.1.0 — 2026-11-06
 
 The first release.
