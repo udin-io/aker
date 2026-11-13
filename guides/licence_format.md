@@ -50,6 +50,18 @@ The licence holds `licence_id`, `serial`, `product`, `customer_name`,
 `moves_per_term`, `issued_at`, `working_key_id`, and optionally `features`: up
 to 32 names of 1 to 32 bytes of `a-z 0-9 _ . -`.
 
+It may also hold `limits`: an object of up to 32 names, in the same form as
+feature names, each mapped to a whole number from 0 to 2^53 - 1 or the text
+`"unlimited"`. The product decides what each name counts. A reader refuses a
+malformed `limits` as `bad_limits`, after the signature holds, and reads a
+name the licence leaves out as 0. An empty object reads as no limits;
+`null` or any other type is malformed. The issuer leaves the field out when it
+names no limit, so a licence without limits reads as it did on 0.3.0.
+
+```json
+"limits": {"clients": 5, "records": 2000000, "assistant_tokens_per_month": "unlimited"}
+```
+
 A reader takes at most 64 KB, checks each signature over the exact bytes it
 received, and reads no field before the signature holds.
 
