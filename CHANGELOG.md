@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.4.0 — 2026-11-13
 
-A licence can sell named limits beside its seats.
+A licence can sell named limits beside its seats, and every app gets the
+code fingerprint and the customer-build check from aker.
 
 ### Added
 
@@ -18,6 +19,14 @@ A licence can sell named limits beside its seats.
   after the signature check.
 - `Aker.Issuer.issue/2` takes `:limits`; `mix aker.sign` takes `--limits`.
 - The gate passes `:limits` to the store with the other attributes.
+- `Aker.Fingerprint` hashes the release on disk (`release/2`, with
+  `:exclude` for an app's own data folders) and the licensing code in
+  memory (`loaded/1`, every aker module plus the app's `:modules`), and
+  `loaded_in_release/2` reads the same hash from a release's files. It uses
+  only the standard library.
+- `Aker.BuildCheck.check/1` refuses a customer build that has the licence
+  check off, trusts no root key, holds a malformed one, or trusts a
+  development key.
 
 ### Changed
 
