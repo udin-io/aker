@@ -42,8 +42,10 @@ defmodule Aker.Issuer do
   Other options: `:customer`, `:seats`, and the term as either
   `:term_days` or `:term_start` plus `:term_end` (`DateTime`, UTC, start
   before end); optionally `:licence_id` (1 to 64 bytes, default a new
-  UUID), `:features` (`[]`), `:serial` (1), `:moves_per_term` (20),
-  `:key_id` (`"dev"`, or the certificate's) and `:now`.
+  UUID), `:features` (`[]`), `:limits` (`%{}`: each name, as text, to a
+  whole number or `:unlimited`; the licence carries no `limits` field when
+  it names none), `:serial` (1), `:moves_per_term` (20), `:key_id`
+  (`"dev"`, or the certificate's) and `:now`.
 
   It signs only a licence `Aker.LicenceFile.verify/2` reads back, and
   answers `{:error, {:invalid, option}}` for the first option outside the
@@ -78,6 +80,8 @@ defmodule Aker.Issuer do
         "issued_at" => iso(now),
         "working_key_id" => signer.key_id
       }
+
+      fields = put_limits(fields, limits_json(Keyword.get(opts, :limits, %{})))
 
       if LicenceFile.licence_fits?(Jason.encode!(fields)),
         do: {:ok, sign(fields, Keyword.fetch!(opts, :working_key), signer.certificate)},
@@ -179,7 +183,8 @@ defmodule Aker.Issuer do
       serial: count?(Keyword.get(opts, :serial, 1), 1),
       moves_per_term: count?(Keyword.get(opts, :moves_per_term, 20), 0),
       key_id: text?(key_id, 64),
-      features: LicenceFile.features?(Keyword.get(opts, :features, []))
+      features: LicenceFile.features?(Keyword.get(opts, :features, [])),
+      limits: LicenceFile.limits?(limits_json(Keyword.get(opts, :limits, %{})))
     ]
     |> Enum.find(fn {_option, ok?} -> not ok? end)
     |> case do
@@ -187,6 +192,19 @@ defmodule Aker.Issuer do
       {option, false} -> {:error, {:invalid, option}}
     end
   end
+
+  # `:unlimited` is written as the text the reader takes; anything else is
+  # left for `LicenceFile.limits?/1` to judge.
+  defp limits_json(limits) when is_map(limits) and not is_struct(limits),
+    do: Map.new(limits, fn {name, value} -> {name, unlimited_text(value)} end)
+
+  defp limits_json(limits), do: limits
+
+  defp unlimited_text(:unlimited), do: "unlimited"
+  defp unlimited_text(value), do: value
+
+  defp put_limits(fields, limits) when map_size(limits) == 0, do: fields
+  defp put_limits(fields, limits), do: Map.put(fields, "limits", limits)
 
   defp text?(value, max),
     do: is_binary(value) and byte_size(value) in 1..max and String.valid?(value)

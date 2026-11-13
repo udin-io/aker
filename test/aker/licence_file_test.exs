@@ -414,6 +414,95 @@ defmodule Aker.LicenceFileTest do
     end
   end
 
+  describe "limits" do
+    test "a 0.3.0 licence with no limits reads %{}", %{install: install} do
+      refute Map.has_key?(licence_fields(install), "limits")
+      assert {:ok, %Terms{limits: limits}} = verify(install, licence(install))
+      assert limits == %{}
+    end
+
+    test "reads each named limit, unlimited included", %{install: install} do
+      bytes =
+        licence(install,
+          fields: %{
+            "limits" => %{
+              "clients" => 5,
+              "records" => 9_007_199_254_740_991,
+              "syncs" => 0,
+              "assistant_tokens_per_month" => "unlimited"
+            }
+          }
+        )
+
+      assert {:ok, %Terms{} = terms} = verify(install, bytes)
+
+      assert terms.limits == %{
+               "clients" => 5,
+               "records" => 9_007_199_254_740_991,
+               "syncs" => 0,
+               "assistant_tokens_per_month" => :unlimited
+             }
+
+      assert Terms.limit(terms, "clients") == 5
+      assert Terms.limit(terms, "assistant_tokens_per_month") == :unlimited
+    end
+
+    test "32 limits of 32-byte names verify", %{install: install} do
+      limits = Map.new(1..32, &{String.pad_leading(Integer.to_string(&1), 32, "l"), &1})
+
+      assert {:ok, %Terms{limits: ^limits}} =
+               verify(install, licence(install, fields: %{"limits" => limits}))
+    end
+
+    test "refuses malformed limits", %{install: install} do
+      many = Map.new(1..33, &{"l#{&1}", 1})
+
+      for limits <- [
+            many,
+            %{String.duplicate("l", 33) => 1},
+            %{"Clients" => 1},
+            %{"" => 1},
+            %{"clients" => -1},
+            %{"clients" => 1.5},
+            %{"clients" => 5.0},
+            %{"clients" => 9_007_199_254_740_992},
+            %{"clients" => "Unlimited"},
+            %{"clients" => "5"},
+            %{"clients" => nil},
+            %{"clients" => true},
+            %{"clients" => %{"max" => 5}},
+            ["clients"],
+            "clients=5",
+            nil
+          ] do
+        assert verify(install, licence(install, fields: %{"limits" => limits})) ==
+                 {:error, :bad_limits},
+               inspect(limits)
+      end
+    end
+
+    test "logs bad_limits and never the limit's name or value", %{install: install} do
+      bytes = licence(install, fields: %{"limits" => %{"secret_count" => -12_345}})
+      log = capture_log(fn -> verify(install, bytes) end)
+      assert log =~ "licence refused: bad_limits"
+      refute log =~ "secret_count"
+      refute log =~ "12345"
+    end
+
+    test "checks the signature before the limits", %{install: install} do
+      envelope =
+        install
+        |> licence(fields: %{"limits" => %{"clients" => -1}})
+        |> Jason.decode!()
+
+      <<first, rest::binary>> = Base.decode64!(envelope["licence"])
+      changed = Base.encode64(<<Bitwise.bxor(first, 1), rest::binary>>)
+
+      assert verify(install, Jason.encode!(Map.put(envelope, "licence", changed))) ==
+               {:error, :bad_signature}
+    end
+  end
+
   describe "the issuer signs only what the reader accepts" do
     setup %{install: install} do
       {:ok, request} =
@@ -448,6 +537,14 @@ defmodule Aker.LicenceFileTest do
       for {extra, option} <- [
             {[features: ["Reports"]], :features},
             {[features: for(n <- 1..33, do: "f#{n}")], :features},
+            {[limits: %{"Clients" => 1}], :limits},
+            {[limits: %{"clients" => -1}], :limits},
+            {[limits: %{"clients" => 1.0}], :limits},
+            {[limits: %{"clients" => "Unlimited"}], :limits},
+            {[limits: %{"clients" => %{"max" => 1}}], :limits},
+            {[limits: %{clients: 1}], :limits},
+            {[limits: Map.new(1..33, &{"l#{&1}", 1})], :limits},
+            {[limits: [{"clients", 1}]], :limits},
             {[customer: String.duplicate("c", 401)], :customer},
             {[customer: ""], :customer},
             {[seats: -1], :seats},
@@ -489,6 +586,39 @@ defmodule Aker.LicenceFileTest do
                {:error, {:invalid, :size}}
 
       assert {:ok, _bytes} = Issuer.issue(request, [customer: String.duplicate("c", 400)] ++ opts)
+
+      # 200 control characters fit with the features alone; the largest
+      # limits, about 1.7 KB of JSON, take the same licence over.
+      limits =
+        Map.new(
+          1..32,
+          &{String.pad_leading(Integer.to_string(&1), 32, "l"), 9_007_199_254_740_991}
+        )
+
+      customer = [customer: String.duplicate("\u0001", 200)]
+      assert {:ok, _bytes} = Issuer.issue(request, customer ++ opts)
+
+      assert Issuer.issue(request, customer ++ [limits: limits] ++ opts) ==
+               {:error, {:invalid, :size}}
+    end
+
+    test "signs the limits it is given, unlimited as an atom or as text",
+         %{issue: issue, install: install} do
+      assert {:ok, bytes} =
+               issue.(limits: %{"clients" => 5, "records" => :unlimited, "syncs" => "unlimited"})
+
+      assert {:ok, %Terms{limits: limits}} = verify(install, bytes)
+      assert limits == %{"clients" => 5, "records" => :unlimited, "syncs" => :unlimited}
+    end
+
+    test "signs no limits field when it is given none", %{issue: issue, install: install} do
+      for extra <- [[], [limits: %{}]] do
+        assert {:ok, bytes} = issue.(extra)
+        signed = bytes |> Jason.decode!() |> Map.fetch!("licence") |> Base.decode64!()
+        refute signed |> Jason.decode!() |> Map.has_key?("limits")
+        assert {:ok, %Terms{limits: limits}} = verify(install, bytes)
+        assert limits == %{}
+      end
     end
 
     test "the largest options it accepts make a licence the reader accepts",

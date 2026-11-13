@@ -89,6 +89,20 @@ defmodule Aker.GateTest do
       assert Gate.check(ctx.opts) == :licensed
     end
 
+    test "the store receives the licence's features and limits", ctx do
+      bytes =
+        licence(ctx.install,
+          fields: %{
+            "features" => ["reports"],
+            "limits" => %{"clients" => 5, "syncs" => "unlimited"}
+          }
+        )
+
+      assert {:ok, record} = Gate.load(ctx.opts, bytes, :admin)
+      assert record.features == ["reports"]
+      assert record.limits == %{"clients" => 5, "syncs" => :unlimited}
+    end
+
     test "a store that answers forbidden makes load answer forbidden and stores nothing", ctx do
       {:locked, :no_licence} = Gate.check(ctx.opts)
       bytes = licence(ctx.install)

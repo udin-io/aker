@@ -20,6 +20,10 @@ defmodule Mix.Tasks.Aker.Sign do
       number of days.
     * `--features`: the features the licence sells, comma-separated, such
       as `--features reports,export`.
+    * `--limits`: the named limits the licence sells, comma-separated
+      `name=value` pairs, each value a whole number or `unlimited`, such as
+      `--limits clients=5,messages_per_month=unlimited`. `--limits ""`
+      names none.
     * `--serial` (default 1): raise it for each licence after the first,
       since an app refuses a licence older than the one it holds.
     * `--key-id` (default `dev`), `--moves` (default 20).
@@ -46,6 +50,7 @@ defmodule Mix.Tasks.Aker.Sign do
     seats: :integer,
     term: :string,
     features: :string,
+    limits: :keep,
     serial: :integer,
     key_id: :string,
     moves: :integer,
@@ -54,8 +59,12 @@ defmodule Mix.Tasks.Aker.Sign do
 
   @usage "usage: mix aker.sign <request> --product <name> --root-key <pem> " <>
            "--customer <name> --seats <n> --term monthly|yearly|<days> " <>
-           "[--features <a,b>] [--working-key <pem>] [--serial <n>] [--key-id <id>] " <>
+           "[--features <a,b>] [--limits <name=n,...>] [--working-key <pem>] [--serial <n>] [--key-id <id>] " <>
            "[--moves <n>] [--out <file>]"
+
+  @limits_message "--limits is at most 32 name=value pairs, each name 1 to 32 bytes of " <>
+                    "a-z, 0-9, _, . and -, used once, each value a whole number up to " <>
+                    "9007199254740991 or unlimited"
 
   # What each bound `Aker.Issuer` checks says, in the task's own words.
   @invalid %{
@@ -66,7 +75,8 @@ defmodule Mix.Tasks.Aker.Sign do
     moves_per_term: "--moves is 0 or more",
     key_id: "--key-id is 1 to 64 bytes",
     features: "--features is at most 32 names, each 1 to 32 bytes of a-z, 0-9, _, . and -",
-    size: "the licence is over 4 KB; use a shorter customer name or fewer features"
+    limits: @limits_message,
+    size: "the licence is over 4 KB; use a shorter customer name, fewer features or fewer limits"
   }
 
   @impl Mix.Task
@@ -76,6 +86,8 @@ defmodule Mix.Tasks.Aker.Sign do
     # `--features ""` names no feature; an empty name between commas is refused.
     features =
       if opts[:features] in [nil, ""], do: [], else: String.split(opts[:features], ",")
+
+    limits = opts |> Keyword.get_values(:limits) |> limits()
 
     if not Request.product?(opts[:product]),
       do: Mix.raise("--product is 1 to 64 characters of a-z, 0-9, _ and -")
@@ -94,6 +106,7 @@ defmodule Mix.Tasks.Aker.Sign do
         seats: opts[:seats],
         term_days: term_days(opts[:term]),
         features: features,
+        limits: limits,
         serial: Keyword.get(opts, :serial, 1),
         key_id: Keyword.get(opts, :key_id, "dev"),
         moves_per_term: Keyword.get(opts, :moves, 20)
@@ -136,6 +149,49 @@ defmodule Mix.Tasks.Aker.Sign do
     case SigningKey.load(Path.expand(path), File.cwd!()) do
       {:ok, key} -> key
       {:error, message} -> Mix.raise(message)
+    end
+  end
+
+  # The issuer checks each name and number again; the task refuses here
+  # only what a map cannot carry to it: a pair that is not name=value, a
+  # value that is not a number, and a name given twice.
+  defp limits([]), do: %{}
+  defp limits([""]), do: %{}
+  defp limits([text]), do: limit_map(text)
+  defp limits(_twice), do: Mix.raise("--limits is given once, with every pair in it")
+
+  defp limit_map(text) do
+    pairs = text |> String.split(",") |> Enum.map(&limit_pair/1)
+    names = Enum.map(pairs, &elem(&1, 0))
+
+    if names == Enum.uniq(names),
+      do: Map.new(pairs),
+      else: Mix.raise(@limits_message)
+  end
+
+  defp limit_pair(pair) do
+    with [name, value] <- String.split(pair, "="),
+         {:ok, value} <- limit_value(value) do
+      {name, value}
+    else
+      _bad -> Mix.raise(@limits_message)
+    end
+  end
+
+  defp limit_value("unlimited"), do: {:ok, :unlimited}
+
+  # Digits only, written the one way `Integer.to_string/1` writes them, so
+  # "+5" and "007" are refused rather than read as 5 and 7.
+  defp limit_value(text) do
+    case Integer.parse(text) do
+      {value, ""} when value >= 0 ->
+        if Integer.to_string(value) == text, do: {:ok, value}, else: :error
+
+      {value, ""} ->
+        {:ok, value}
+
+      _other ->
+        :error
     end
   end
 
