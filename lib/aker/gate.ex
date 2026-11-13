@@ -367,6 +367,7 @@ defmodule Aker.Gate do
       customer_name: terms.customer_name,
       seats: terms.seats,
       features: terms.features,
+      limits: terms.limits,
       term_start: terms.term_start,
       term_end: terms.term_end,
       last_seen_at: last_seen

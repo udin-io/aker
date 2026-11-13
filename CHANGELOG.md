@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and Aker adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+A licence can sell named limits beside its seats.
+
+### Added
+
+- A licence may carry `limits`: up to 32 names, each mapped to a whole
+  number or `"unlimited"`. `Aker.Terms` reads them as `limits`, and
+  `Aker.Terms.limit/2` answers 0 for a name the licence leaves out.
+- `Aker.LicenceFile.verify/2` refuses malformed limits as `:bad_limits`,
+  after the signature check.
+- `Aker.Issuer.issue/2` takes `:limits`; `mix aker.sign` takes `--limits`.
+- The gate passes `:limits` to the store with the other attributes.
+
+### Changed
+
+- `%Aker.Terms{}` requires `:limits`. A host that builds one in its own
+  tests adds `limits: %{}`.
+
+### Unchanged
+
+- A licence without limits signs and reads as on 0.3.0.
+
 ## v0.3.0 — 2026-11-07
 
 An app can tell the licensing server what it runs at each check-in.

@@ -24,23 +24,25 @@ defmodule Aker.LicenceFile do
        is not for a licence working key.
     4. `:bad_signature`: the certificate's key did not sign the licence.
     5. `:bad_licence`: the licence's fields are malformed.
-    6. `:wrong_working_key`: the licence names another working key id.
-    7. `:certificate_out_of_date`: the certificate was not in date when
+    6. `:bad_limits`: the licence's `limits` field is malformed (see
+       `limits?/1`).
+    7. `:wrong_working_key`: the licence names another working key id.
+    8. `:certificate_out_of_date`: the certificate was not in date when
        the licence was issued, or is not now.
-    8. `:wrong_product`: the licence is for another product. One root key
+    9. `:wrong_product`: the licence is for another product. One root key
        can sign for several products, so this check keeps one product's
        licence off another.
-    9. `:wrong_machine`: the licence names another machine id.
-   10. `:wrong_install_key`: the licence names another install key, or
+   10. `:wrong_machine`: the licence names another machine id.
+   11. `:wrong_install_key`: the licence names another install key, or
        the install key's own error (`:install_key_missing`,
        `:install_key_unreadable`, `:install_key_timeout`) when this install
        has none to compare.
-   11. `:install_key_proof_failed`: this install's key did not sign a
+   12. `:install_key_proof_failed`: this install's key did not sign a
        fresh random value that verifies against the licence's key.
-   12. `:clock_behind`: the clock reads more than a day before the latest
+   13. `:clock_behind`: the clock reads more than a day before the latest
        time the app has seen, so setting it back cannot extend a term.
-   13. `:term_not_started` or `:term_ended`.
-   14. `:older_serial`: the licence is older than the one already stored.
+   14. `:term_not_started` or `:term_ended`.
+   15. `:older_serial`: the licence is older than the one already stored.
   """
 
   require Logger
@@ -59,6 +61,9 @@ defmodule Aker.LicenceFile do
   @purpose "licence-working-key"
   @max_features 32
   @feature ~r/\A[a-z0-9_.-]{1,32}\z/
+  @max_limits 32
+  # The largest integer a JSON reader in any language holds exactly.
+  @max_limit 9_007_199_254_740_991
 
   @type refusal ::
           :bad_envelope
@@ -66,6 +71,7 @@ defmodule Aker.LicenceFile do
           | :bad_certificate
           | :bad_signature
           | :bad_licence
+          | :bad_limits
           | :wrong_working_key
           | :certificate_out_of_date
           | :wrong_product
@@ -160,6 +166,7 @@ defmodule Aker.LicenceFile do
            read_certificate(parts.certificate, parts.certificate_signature, root_keys),
          :ok <- signed(parts.licence, parts.signature, cert.public_key),
          {:ok, terms} <- licence(parts.licence),
+         {:ok, terms} <- read_limits(terms),
          :ok <- same(cert.key_id, terms.working_key_id, :wrong_working_key),
          :ok <- certificate_in_date(cert, terms.issued_at, now),
          :ok <- same(terms.product, product, :wrong_product),
@@ -321,12 +328,23 @@ defmodule Aker.LicenceFile do
          moves_per_term: moves_per_term,
          issued_at: issued_at,
          working_key_id: working_key_id,
-         features: Map.get(fields, "features", [])
+         features: Map.get(fields, "features", []),
+         limits: Map.get(fields, "limits", %{})
        }}
     else
       _malformed -> {:error, :bad_licence}
     end
   end
+
+  # Step 6: the limits, read only after the signature and the other fields held.
+  defp read_limits(%{limits: limits} = terms) do
+    if limits?(limits),
+      do: {:ok, %{terms | limits: Map.new(limits, &read_limit/1)}},
+      else: {:error, :bad_limits}
+  end
+
+  defp read_limit({name, "unlimited"}), do: {name, :unlimited}
+  defp read_limit({name, count}), do: {name, count}
 
   @doc "Whether licence JSON `bytes` fit the size this module reads."
   @spec licence_fits?(binary()) :: boolean()
@@ -341,6 +359,25 @@ defmodule Aker.LicenceFile do
     do: Enum.all?(features, &(is_binary(&1) and Regex.match?(@feature, &1)))
 
   def features?(_features), do: false
+
+  @doc """
+  Whether `limits` is a map a licence may carry, as its JSON reads: at
+  most 32 names, each 1 to 32 bytes of `a-z`, `0-9`, `_`, `.` and `-`,
+  each value a whole number from 0 to 2^53 - 1 or the text `"unlimited"`.
+  """
+  @spec limits?(term()) :: boolean()
+  def limits?(limits)
+      when is_map(limits) and not is_struct(limits) and
+             map_size(limits) <= @max_limits,
+      do: Enum.all?(limits, &limit?/1)
+
+  def limits?(_limits), do: false
+
+  defp limit?({name, value}),
+    do: is_binary(name) and Regex.match?(@feature, name) and limit_value?(value)
+
+  defp limit_value?("unlimited"), do: true
+  defp limit_value?(value), do: is_integer(value) and value in 0..@max_limit
 
   defp base64(value) when is_binary(value), do: Base.decode64(value)
   defp base64(_value), do: :error

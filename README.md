@@ -80,8 +80,12 @@ Each refusal has its own reason, such as `:unknown_root`, `:wrong_machine` or
 ```sh
 mix aker.sign activation-request.json --product my_app \
   --root-key ../keys/root.pem --customer "Acme Logistics" --seats 10 \
-  --term yearly --features reports,export
+  --term yearly --features reports,export --limits clients=5,messages=unlimited
 ```
+
+A licence sells seats, features and named limits. Your app reads a limit
+with `Aker.Terms.limit(terms, "clients")`, which answers the number,
+`:unlimited`, or 0 when the licence names no such limit.
 
 The task refuses a key inside the folder it runs in, and its last line prints
 the root key's public half, which the app's root key list must hold.

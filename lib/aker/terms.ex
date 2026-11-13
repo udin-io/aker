@@ -6,6 +6,12 @@ defmodule Aker.Terms do
 
   `features` lists the features the licence sells beside its seats; a
   licence without the field reads as `[]`.
+
+  `limits` maps each named limit the licence sells to a whole number or
+  `:unlimited`; a licence without the field reads as `%{}`. The product
+  decides what each name counts. Read one with `limit/2`, which answers 0
+  for a name the licence leaves out, so an older licence never unlocks a
+  limit added after it was signed.
   """
 
   @enforce_keys [
@@ -20,7 +26,8 @@ defmodule Aker.Terms do
     :moves_per_term,
     :issued_at,
     :working_key_id,
-    :features
+    :features,
+    :limits
   ]
   defstruct @enforce_keys
 
@@ -36,6 +43,11 @@ defmodule Aker.Terms do
           moves_per_term: non_neg_integer(),
           issued_at: DateTime.t(),
           working_key_id: String.t(),
-          features: [String.t()]
+          features: [String.t()],
+          limits: %{String.t() => non_neg_integer() | :unlimited}
         }
+
+  @doc "The number or `:unlimited` the licence sells for `name`, 0 when it names none."
+  @spec limit(t(), String.t()) :: non_neg_integer() | :unlimited
+  def limit(%__MODULE__{limits: limits}, name), do: Map.get(limits, name, 0)
 end

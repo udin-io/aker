@@ -135,6 +135,63 @@ defmodule Mix.Tasks.Aker.SignTest do
     assert DateTime.diff(terms.term_end, terms.term_start, :day) == 365
   end
 
+  test "signs --limits, and --limits \"\" names none", ctx do
+    out = Path.join(ctx.dir, "licence.json")
+
+    Sign.run(
+      base(ctx, [
+        "--seats",
+        "0",
+        "--limits",
+        "clients=5,records=2000000,assistant_tokens_per_month=unlimited"
+      ])
+    )
+
+    assert {:ok, terms} = verify(ctx, out)
+
+    assert terms.limits == %{
+             "clients" => 5,
+             "records" => 2_000_000,
+             "assistant_tokens_per_month" => :unlimited
+           }
+
+    assert terms.seats == 0
+
+    Sign.run(base(ctx, ["--limits", "", "--serial", "2"]))
+    assert {:ok, %{limits: limits}} = verify(ctx, out, stored_serial: 1)
+    assert limits == %{}
+  end
+
+  test "refuses each bad --limits form with one message for the flag", ctx do
+    for limits <- [
+          "clients=5,clients=6",
+          "clients=-1",
+          "Clients=5",
+          "clients",
+          "clients=",
+          "=5",
+          "clients=5,,records=1",
+          "clients=5=6",
+          "clients=1.5",
+          "clients=Unlimited",
+          "clients= 5",
+          "clients=9007199254740992",
+          "clients=+5",
+          "clients=007",
+          Enum.map_join(1..33, ",", &"l#{&1}=1")
+        ] do
+      assert_raise Mix.Error, ~r/--limits is at most 32 name=value pairs/, fn ->
+        Sign.run(base(ctx, ["--limits", limits]))
+      end
+    end
+
+    assert_raise Mix.Error, ~r/--limits is given once/, fn ->
+      Sign.run(base(ctx, ["--limits", "clients=1", "--limits", "records=2"]))
+    end
+
+    refute File.exists?(Path.join(ctx.dir, "licence.json"))
+  end
+
   test "a licence it signs is refused by an app that trusts another root", ctx do
     Sign.run(base(ctx))
 

@@ -5,8 +5,10 @@ defmodule Aker.Store do
 
   A record is any map or struct with `:envelope` (the licence file's
   bytes), `:licence_id`, `:serial`, `:term_end` and `:last_seen_at`.
-  `store/3`'s attributes add `:customer_name`, `:seats`, `:features` and
-  `:term_start`.
+  `store/3`'s attributes add `:customer_name`, `:seats`, `:features`,
+  `:limits` (as `Aker.Terms` reads them) and `:term_start`. A store keeps
+  only the attributes it has columns for: the stored licence file holds
+  them all.
 
   The `actor` passes from the host's call to `store/3` untouched; the gate
   never reads it. A renewal stores as `:system`. The store decides who may
