@@ -110,6 +110,7 @@ Aker.Issuer.issue(request_bytes,
   root_keys: root_keys,
   customer: "Acme Logistics",
   seats: 10,
+  limits: %{"clients" => 5, "messages_per_month" => :unlimited},
   licence_id: licence.id,
   term_start: term_start,
   term_end: term_end
@@ -118,3 +119,53 @@ Aker.Issuer.issue(request_bytes,
 
 A renewal passes the licence's own id and the next term, and a higher
 `:serial`.
+
+## 6. Read a named limit
+
+A licence can sell named limits beside its seats. Your app decides what each
+name counts, and reads it from the verified terms:
+
+```elixir
+Aker.Terms.limit(terms, "clients")
+# => 5, :unlimited, or 0 when the licence names no such limit
+```
+
+## 7. Report what runs
+
+`Aker.Fingerprint` hashes the code your install runs, for your app to send
+with each renewal through the gate's `:check_in_fields`:
+
+```elixir
+check_in_fields: fn ->
+  %{
+    "release" => to_string(Aker.Fingerprint.cached_release(:my_app)),
+    "loaded" => Aker.Fingerprint.loaded(modules: [MyApp.Licensing, MyAppWeb.LicenceLock])
+  }
+end
+```
+
+`release` hashes the release on disk and reads `not_a_release` outside one.
+It skips each app's `priv/` except native libraries; list any other data
+folder in `:exclude`. `loaded` hashes every aker module and the modules you
+list. A build step can record the same value with
+`Aker.Fingerprint.loaded_in_release(release_root, modules: [...])`. The
+module uses only the standard library, so a script can load it from the
+release's `ebin`. This is evidence for the licensing server, not a lock.
+
+## 8. Refuse a customer build with the check off
+
+Call `Aker.BuildCheck.check/1` when your app compiles and again when it
+starts:
+
+```elixir
+Aker.BuildCheck.check(%{
+  customer?: MyApp.Build.customer?(),
+  enforced?: MyApp.Licensing.enforced?(),
+  root_keys: System.get_env("MY_APP_LICENCE_ROOT_KEYS"),
+  dev_keys: [MyApp.Licensing.dev_root_key()]
+})
+# => :ok, or {:error, :licence_check_off | :no_root_key | :bad_root_key | :dev_root_key}
+```
+
+Map each refusal to a sentence that names your own settings, and stop the
+compile or the boot on it.
